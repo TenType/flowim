@@ -1,15 +1,21 @@
-type Value = f64;
+pub type Value = f64;
 
+#[derive(Copy, Clone)]
 pub enum OpCode {
     Constant(usize),
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
+    Negate,
     Return,
 }
 
 pub struct Chunk {
     length: u8,
     lines: Vec<u8>,
-    constants: Vec<Value>,
-    code: Vec<OpCode>,
+    pub constants: Vec<Value>,
+    pub code: Vec<OpCode>,
 }
 
 impl Chunk {
@@ -36,20 +42,31 @@ impl Chunk {
     pub fn disassemble(&self, name: &str) {
         println!("== {} ==", name);
         for (i, instruction) in self.code.iter().enumerate() {
-            print!("{:04} ", i);
-            if i > 0 && self.lines[i] == self.lines[i - 1] {
-                print!("   | ");
-            } else {
-                print!("{:>4} ", self.lines[i]);
-            }
+            self.disassemble_instruction(instruction, i);
+        }
+    }
 
-            match instruction {
-                OpCode::Constant(value) => println!(
-                    "{:<16} {:>4} {}",
-                    "OP_CONSTANT", value, self.constants[*value as usize]
-                ),
-                OpCode::Return => println!("OP_RETURN"),
-            }
+    pub fn disassemble_instruction(&self, instruction: &OpCode, i: usize) {
+        print!("{:04} ", i);
+        if i > 0 && self.lines[i] == self.lines[i - 1] {
+            print!("   | ");
+        } else {
+            print!("{:>4} ", self.lines[i]);
+        }
+
+        match instruction {
+            OpCode::Constant(value) => println!(
+                "{:<16} {:>4} {}",
+                "OP_CONSTANT",
+                value,
+                self.constants[*value as usize] // print_value
+            ),
+            OpCode::Add => println!("OP_ADD"),
+            OpCode::Subtract => println!("OP_SUBTRACT"),
+            OpCode::Multiply => println!("OP_MULTIPLY"),
+            OpCode::Divide => println!("OP_DIVIDE"),
+            OpCode::Negate => println!("OP_NEGATE"),
+            OpCode::Return => println!("OP_RETURN"),
         }
     }
 }
