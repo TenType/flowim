@@ -37,8 +37,8 @@ impl VM {
     }
 
     fn binary_op(&mut self, operation: fn(Value, Value) -> Value) {
-        let a = self.pop();
         let b = self.pop();
+        let a = self.pop();
         self.push(operation(a, b))
     }
 
