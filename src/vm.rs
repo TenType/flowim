@@ -1,11 +1,7 @@
-use crate::chunk::{Chunk, OpCode, Value};
-
-#[allow(dead_code)]
-pub enum Result {
-    Ok,
-    CompileError,
-    RuntimeError,
-}
+use crate::{
+    chunk::{Chunk, OpCode, Value},
+    result::LangError,
+};
 
 pub struct VM {
     chunk: Chunk,
@@ -42,7 +38,7 @@ impl VM {
         self.push(operation(a, b))
     }
 
-    pub fn run(&mut self) -> Result {
+    pub fn run(&mut self) -> Result<(), LangError> {
         loop {
             let instruction = self.next();
 
@@ -73,7 +69,7 @@ impl VM {
                 }
                 OpCode::Return => {
                     println!("{}", self.pop());
-                    return Result::Ok;
+                    return Ok(());
                 }
             }
         }

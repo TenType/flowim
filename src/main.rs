@@ -1,8 +1,12 @@
 mod chunk;
+mod result;
 mod vm;
 
 use chunk::{Chunk, OpCode};
+use result::LangError::*;
 use vm::VM;
+
+use std::process;
 
 fn main() {
     let mut chunk = Chunk::new();
@@ -38,5 +42,10 @@ fn main() {
 
     chunk.disassemble("Test chunk");
 
-    VM::new(chunk).run();
+    let result = VM::new(chunk).run();
+    match result {
+        Err(CompileError) => process::exit(65),
+        Err(RuntimeError) => process::exit(70),
+        Ok(_) => (),
+    }
 }
