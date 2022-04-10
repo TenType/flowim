@@ -1,51 +1,53 @@
 mod chunk;
+mod lexer;
 mod result;
+mod token;
 mod vm;
 
-use chunk::{Chunk, OpCode};
 use result::LangError::*;
-use vm::VM;
-
-use std::process;
+use std::{
+    env, fs,
+    io::{self, Write},
+    process,
+};
 
 fn main() {
-    let mut chunk = Chunk::new();
+    let args: Vec<String> = env::args().collect();
 
-    // 5.0
-    let constant = chunk.add_constant(5.0);
-    chunk.write(constant, 100);
+    match args.len() {
+        1 => repl(),
+        2 => run_file(&args[1]),
+        _ => process::exit(64),
+    }
+    repl();
+}
 
-    // + 3.0 = 8.0
-    let constant = chunk.add_constant(3.0);
-    chunk.write(constant, 100);
-    chunk.write(OpCode::Add, 100);
-
-    // * 2.0 = 16.0
-    let constant = chunk.add_constant(2.0);
-    chunk.write(constant, 100);
-    chunk.write(OpCode::Multiply, 100);
-
-    // / 4.0 = 4.0
-    let constant = chunk.add_constant(4.0);
-    chunk.write(constant, 100);
-    chunk.write(OpCode::Divide, 100);
-
-    // - 1.2 = 2.8
-    let constant = chunk.add_constant(1.2);
-    chunk.write(constant, 100);
-    chunk.write(OpCode::Subtract, 100);
-
-    // -2.8
-    chunk.write(OpCode::Negate, 100);
-
-    chunk.write(OpCode::Return, 100);
-
-    chunk.disassemble("Test chunk");
-
-    let result = VM::new(chunk).run();
+fn run_code(code: String) {
+    // let result = VM::new(chunk).run();
+    let result = lexer::lex(code);
     match result {
         Err(CompileError) => process::exit(65),
         Err(RuntimeError) => process::exit(70),
         Ok(_) => (),
+    }
+}
+
+fn run_file(path: &str) {
+    let code = fs::read_to_string(path).expect("Could not read test file");
+    run_code(code);
+}
+
+fn repl() {
+    loop {
+        print!(">>> ");
+        io::stdout().flush().unwrap();
+        let mut line = String::new();
+        io::stdin()
+            .read_line(&mut line)
+            .expect("Could not read line from REPL");
+        if line.is_empty() {
+            continue;
+        }
+        run_code(line);
     }
 }

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::{
     chunk::{Chunk, OpCode, Value},
     result::LangError,
@@ -48,8 +50,7 @@ impl VM {
                     print!("[ {} ]", item);
                 }
                 println!();
-                self.chunk
-                    .disassemble_instruction(&instruction, self.ip - 1);
+                self.chunk.disassemble_op(&instruction, self.ip - 1);
             }
 
             match instruction {

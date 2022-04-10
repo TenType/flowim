@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 pub type Value = f64;
 
 #[derive(Copy, Clone)]
@@ -42,11 +44,11 @@ impl Chunk {
     pub fn disassemble(&self, name: &str) {
         println!("== {} ==", name);
         for (i, instruction) in self.code.iter().enumerate() {
-            self.disassemble_instruction(instruction, i);
+            self.disassemble_op(instruction, i);
         }
     }
 
-    pub fn disassemble_instruction(&self, instruction: &OpCode, i: usize) {
+    pub fn disassemble_op(&self, instruction: &OpCode, i: usize) {
         print!("{:04} ", i);
         if i > 0 && self.lines[i] == self.lines[i - 1] {
             print!("   | ");
