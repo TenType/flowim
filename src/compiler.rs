@@ -1,0 +1,254 @@
+use crate::{
+    chunk::{Chunk, OpCode, Value},
+    lexer::Lexer,
+    result::LangError,
+    token::{Token, TokenType},
+};
+use std::collections::HashMap;
+
+#[derive(PartialEq, PartialOrd)]
+enum Precedence {
+    None,
+    Assignment,
+    Or,
+    And,
+    Equality,
+    Comparison,
+    Term,
+    Factor,
+    Unary,
+    Call,
+    Primary,
+}
+
+impl Precedence {
+    fn next(&self) -> Self {
+        use Precedence::*;
+        match self {
+            None => Assignment,
+            Assignment => Or,
+            Or => And,
+            And => Equality,
+            Equality => Comparison,
+            Comparison => Term,
+            Term => Factor,
+            Factor => Unary,
+            Unary => Call,
+            Call => Primary,
+            Primary => panic!("No rule higher than Primary"),
+        }
+    }
+}
+
+struct ParseRule {
+    prefix: Option<fn(&mut Compiler) -> ()>,
+    infix: Option<fn(&mut Compiler) -> ()>,
+    precedence: Precedence,
+}
+
+struct Compiler {
+    chunk: Chunk,
+    lexer: Lexer,
+    curr: Token,
+    prev: Token,
+    had_error: bool,
+    panic_mode: bool,
+    rules: HashMap<TokenType, ParseRule>,
+}
+
+impl Compiler {
+    fn new(code: String) -> Self {
+        use Precedence as P;
+        use TokenType::*;
+
+        let rule = |prefix, infix, precedence| ParseRule {
+            prefix,
+            infix,
+            precedence,
+        };
+        // let empty = || rule(None, None, P::None);
+
+        let rules = HashMap::from([
+            (LeftParen, rule(Some(Self::group), None, P::None)),
+            (Minus, rule(Some(Self::unary), Some(Self::binary), P::Term)),
+            (Plus, rule(None, Some(Self::binary), P::Term)),
+            (Slash, rule(None, Some(Self::binary), P::Factor)),
+            (Star, rule(None, Some(Self::binary), P::Factor)),
+            (Int, rule(Some(Self::int), None, P::None)),
+            (Float, rule(Some(Self::float), None, P::None)),
+        ]);
+
+        Self {
+            chunk: Chunk::new(),
+            lexer: Lexer::new(code),
+            curr: Token {
+                id: TokenType::Eof,
+                lexeme: "".to_string(),
+                line: 1,
+            },
+            prev: Token {
+                id: TokenType::Eof,
+                lexeme: "".to_string(),
+                line: 1,
+            },
+            had_error: false,
+            panic_mode: false,
+            rules,
+        }
+    }
+
+    fn compile(&mut self) -> bool {
+        self.next();
+        self.expression();
+        self.end_compile();
+        self.eat(TokenType::Eof, "Expected to reach the end of the file");
+        !self.had_error
+    }
+
+    fn next(&mut self) {
+        self.prev = self.curr.clone();
+
+        loop {
+            self.curr = self.lexer.lex_token();
+            if self.curr.id != TokenType::Error {
+                break;
+            }
+            self.error_curr(&self.curr.lexeme.clone());
+        }
+    }
+
+    fn eat(&mut self, id: TokenType, message: &str) {
+        if self.curr.id == id {
+            self.next();
+            return;
+        }
+        self.error_curr(message);
+    }
+
+    fn emit(&mut self, op: OpCode) {
+        self.chunk.write(op, self.prev.line);
+    }
+
+    fn emit_constant(&mut self, value: Value) {
+        let index = self.chunk.add_constant(value);
+        self.emit(index);
+    }
+
+    fn expression(&mut self) {
+        self.parse_precedence(Precedence::Assignment);
+    }
+
+    fn int(&mut self) {
+        let value = self.prev.lexeme.parse::<isize>().unwrap();
+        self.emit_constant(value as f64);
+    }
+
+    fn float(&mut self) {
+        let value = self.prev.lexeme.parse::<f64>().unwrap();
+        self.emit_constant(value as f64);
+    }
+
+    fn group(&mut self) {
+        self.expression();
+        self.eat(TokenType::RightParen, "Expected closing parenthesis ')'");
+    }
+
+    fn unary(&mut self) {
+        let operator_id = self.prev.id;
+
+        self.parse_precedence(Precedence::Unary);
+
+        #[allow(clippy::single_match)]
+        match operator_id {
+            TokenType::Minus => self.emit(OpCode::Negate),
+            _ => (),
+        }
+    }
+
+    fn binary(&mut self) {
+        let operator_id = self.prev.id;
+        let rule = self.get_rule(operator_id).precedence.next();
+
+        self.parse_precedence(rule);
+
+        use OpCode::*;
+        use TokenType::*;
+        match operator_id {
+            Plus => self.emit(Add),
+            Minus => self.emit(Subtract),
+            Star => self.emit(Multiply),
+            Slash => self.emit(Divide),
+            _ => (),
+        }
+    }
+
+    fn parse_precedence(&mut self, precedence: Precedence) {
+        self.next();
+        let prefix_rule = self.get_rule(self.prev.id).prefix;
+        if let Some(func) = prefix_rule {
+            func(self);
+        } else {
+            return self.error("Expected expression");
+        }
+
+        while precedence <= self.get_rule(self.curr.id).precedence {
+            self.next();
+            let infix_rule = self.get_rule(self.prev.id).infix;
+            if let Some(func) = infix_rule {
+                func(self);
+            } else {
+                return self.error("Unexpected infix rule call");
+            }
+        }
+    }
+
+    fn get_rule(&self, id: TokenType) -> &ParseRule {
+        self.rules.get(&id).unwrap_or(&ParseRule {
+            prefix: None,
+            infix: None,
+            precedence: Precedence::None,
+        })
+        // .unwrap_or_else(|| panic!("Undefined rule {:?}", id))
+    }
+
+    fn error_curr(&mut self, msg: &str) {
+        self.error_at(self.curr.clone(), msg);
+    }
+
+    fn error(&mut self, msg: &str) {
+        self.error_at(self.prev.clone(), msg);
+    }
+
+    fn error_at(&mut self, token: Token, msg: &str) {
+        if self.panic_mode {
+            return;
+        }
+        self.had_error = true;
+        self.panic_mode = true;
+        eprint!("[line {}] Error", token.line);
+        if token.id == TokenType::Eof {
+            eprint!(" at end of file");
+        } else {
+            eprint!(" at `{}`", token.lexeme);
+        }
+        eprintln!(": {}", msg);
+    }
+
+    fn end_compile(&mut self) {
+        self.emit(OpCode::Return);
+
+        // if cfg!(debug_assertions) && !self.had_error {
+        //     self.chunk.disassemble("Debug code");
+        // }
+    }
+}
+
+pub fn compile(code: String) -> Result<Chunk, LangError> {
+    let mut compiler = Compiler::new(code);
+    let passed = compiler.compile();
+    if passed {
+        Ok(compiler.chunk)
+    } else {
+        Err(LangError::CompileError)
+    }
+}

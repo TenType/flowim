@@ -1,10 +1,11 @@
+#[derive(Clone)]
 pub struct Token {
     pub id: TokenType,
     pub lexeme: String,
     pub line: usize,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum TokenType {
     LeftParen,
     RightParen,

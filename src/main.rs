@@ -1,15 +1,17 @@
 mod chunk;
+mod compiler;
 mod lexer;
 mod result;
 mod token;
 mod vm;
 
-use result::LangError::*;
+use result::LangError::{self, *};
 use std::{
     env, fs,
     io::{self, Write},
     process,
 };
+use vm::VM;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -22,13 +24,19 @@ fn main() {
     repl();
 }
 
-fn run_code(code: String) {
-    // let result = VM::new(chunk).run();
-    let result = lexer::lex(code);
+fn _check_result<T>(result: Result<T, LangError>) -> T {
     match result {
         Err(CompileError) => process::exit(65),
         Err(RuntimeError) => process::exit(70),
-        Ok(_) => (),
+        Ok(output) => output,
+    }
+}
+
+#[allow(unused_must_use)]
+fn run_code(code: String) {
+    let tokens = compiler::compile(code);
+    if let Ok(chunk) = tokens {
+        VM::new(chunk).run();
     }
 }
 

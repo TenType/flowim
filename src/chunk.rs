@@ -15,7 +15,7 @@ pub enum OpCode {
 
 pub struct Chunk {
     length: u8,
-    lines: Vec<u8>,
+    lines: Vec<usize>,
     pub constants: Vec<Value>,
     pub code: Vec<OpCode>,
 }
@@ -30,7 +30,7 @@ impl Chunk {
         }
     }
 
-    pub fn write(&mut self, byte: OpCode, line: u8) {
+    pub fn write(&mut self, byte: OpCode, line: usize) {
         self.code.push(byte);
         self.lines.push(line);
         self.length += 1;
