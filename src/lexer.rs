@@ -201,7 +201,7 @@ impl Lexer {
     }
 
     fn at_end(&self) -> bool {
-        self.curr >= self.chars.len() || self.peek() == '\0'
+        self.curr >= self.chars.len() - 1 || self.peek() == '\0'
     }
 }
 
