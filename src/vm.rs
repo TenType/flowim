@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use crate::{
     chunk::{Chunk, OpCode, Value},
     result::LangError,

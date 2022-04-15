@@ -32,11 +32,10 @@ fn _check_result<T>(result: Result<T, LangError>) -> T {
     }
 }
 
-#[allow(unused_must_use)]
 fn run_code(code: String) {
     let tokens = compiler::compile(code);
     if let Ok(chunk) = tokens {
-        VM::new(chunk).run();
+        let _ = VM::new(chunk).run();
     }
 }
 

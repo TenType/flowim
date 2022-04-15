@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 pub type Value = f64;
 
 #[derive(Copy, Clone)]
@@ -41,7 +39,7 @@ impl Chunk {
         OpCode::Constant(self.constants.len() - 1)
     }
 
-    pub fn disassemble(&self, name: &str) {
+    pub fn _disassemble(&self, name: &str) {
         println!("== {} ==", name);
         for (i, instruction) in self.code.iter().enumerate() {
             self.disassemble_op(instruction, i);
