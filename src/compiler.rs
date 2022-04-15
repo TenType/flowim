@@ -76,6 +76,9 @@ impl Compiler {
             (Star, rule(None, Some(Self::binary), P::Factor)),
             (Int, rule(Some(Self::int), None, P::None)),
             (Float, rule(Some(Self::float), None, P::None)),
+            (True, rule(Some(Self::literal), None, P::None)),
+            (False, rule(Some(Self::literal), None, P::None)),
+            (Not, rule(Some(Self::unary), None, P::None)),
         ]);
 
         Self {
@@ -140,12 +143,12 @@ impl Compiler {
 
     fn int(&mut self) {
         let value = self.prev.lexeme.parse::<isize>().unwrap();
-        self.emit_constant(value as f64);
+        self.emit_constant(Value::Int(value));
     }
 
     fn float(&mut self) {
         let value = self.prev.lexeme.parse::<f64>().unwrap();
-        self.emit_constant(value as f64);
+        self.emit_constant(Value::Float(value));
     }
 
     fn group(&mut self) {
@@ -158,9 +161,9 @@ impl Compiler {
 
         self.parse_precedence(Precedence::Unary);
 
-        #[allow(clippy::single_match)]
         match operator_id {
             TokenType::Minus => self.emit(OpCode::Negate),
+            TokenType::Not => self.emit(OpCode::Not),
             _ => (),
         }
     }
@@ -178,6 +181,14 @@ impl Compiler {
             Minus => self.emit(Subtract),
             Star => self.emit(Multiply),
             Slash => self.emit(Divide),
+            _ => (),
+        }
+    }
+
+    fn literal(&mut self) {
+        match self.prev.id {
+            TokenType::False => self.emit(OpCode::False),
+            TokenType::True => self.emit(OpCode::True),
             _ => (),
         }
     }

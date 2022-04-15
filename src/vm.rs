@@ -32,45 +32,108 @@ impl VM {
         self.stack.pop().expect("Empty stack")
     }
 
-    fn binary_op(&mut self, operation: fn(Value, Value) -> Value) {
-        let b = self.pop();
-        let a = self.pop();
-        self.push(operation(a, b))
+    fn peek(&self) -> Value {
+        *self.stack.last().expect("Empty stack")
+    }
+
+    fn is_falsy(&self, value: Value) -> bool {
+        match value {
+            Value::Bool(v) => !v,
+            _ => false,
+        }
+    }
+
+    fn binary_op(&mut self, operation: OpCode) -> Result<(), LangError> {
+        use OpCode::{Add, Divide, Multiply, Subtract};
+        use Value::*;
+        let operands = (self.pop(), self.pop());
+        let result = match operands {
+            (Int(a), Int(b)) => Int(match operation {
+                Add => a + b,
+                Subtract => a - b,
+                Multiply => a * b,
+                Divide => a / b,
+                _ => panic!("Unsupported binary operation: {:?}", operation),
+            }),
+            (Float(a), Float(b)) => Float(match operation {
+                Add => a + b,
+                Subtract => a - b,
+                Multiply => a * b,
+                Divide => a / b,
+                _ => panic!("Unsupported binary operation: {:?}", operation),
+            }),
+            _ => {
+                self.runtime_error("Operands must be both `int` or `float`");
+                return Err(LangError::RuntimeError);
+            }
+        };
+
+        self.push(result);
+
+        Ok(())
     }
 
     pub fn run(&mut self) -> Result<(), LangError> {
         loop {
-            let instruction = self.next();
+            let op = self.next();
 
             if cfg!(debug_assertions) {
-                print!("          ");
-                for item in &self.stack {
-                    print!("[ {} ]", item);
+                if !self.stack.is_empty() {
+                    print!("          ");
+                    for item in &self.stack {
+                        print!("[ {} ]", item);
+                    }
+                    println!();
                 }
-                println!();
-                self.chunk.disassemble_op(&instruction, self.ip - 1);
+                self.chunk.disassemble_op(&op, self.ip - 1);
             }
 
-            match instruction {
-                OpCode::Constant(value) => {
+            use OpCode::*;
+            match op {
+                Constant(value) => {
                     let constant = self.chunk.constants[value];
                     self.push(constant);
                 }
 
-                OpCode::Add => self.binary_op(|a, b| a + b),
-                OpCode::Subtract => self.binary_op(|a, b| a - b),
-                OpCode::Multiply => self.binary_op(|a, b| a * b),
-                OpCode::Divide => self.binary_op(|a, b| a / b),
+                Add => self.binary_op(Add)?,
+                Subtract => self.binary_op(Subtract)?,
+                Multiply => self.binary_op(Multiply)?,
+                Divide => self.binary_op(Divide)?,
 
-                OpCode::Negate => {
-                    let value = -self.pop();
-                    self.push(value);
+                Negate => match self.peek() {
+                    Value::Int(value) => {
+                        self.pop();
+                        self.push(Value::Int(-value));
+                    }
+                    Value::Float(value) => {
+                        self.pop();
+                        self.push(Value::Float(-value));
+                    }
+                    value => {
+                        self.runtime_error(&format!(
+                            "Operand of {} must be an `int` or `float`",
+                            value
+                        ));
+                        return Err(LangError::RuntimeError);
+                    }
+                },
+                Not => {
+                    let v = self.pop();
+                    self.push(Value::Bool(self.is_falsy(v)));
                 }
-                OpCode::Return => {
+                Return => {
                     println!("{}", self.pop());
                     return Ok(());
                 }
+                True => self.push(Value::Bool(true)),
+                False => self.push(Value::Bool(false)),
             }
         }
+    }
+
+    fn runtime_error(&mut self, msg: &str) {
+        eprintln!("{}", msg);
+        let line = self.chunk.lines[self.ip - 1];
+        eprintln!("[line {}] in script", line);
     }
 }

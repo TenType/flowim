@@ -19,6 +19,7 @@ impl Lexer {
         let keywords = HashMap::from([
             ("or", Or),
             ("and", And),
+            ("not", Not),
             ("if", If),
             ("else", Else),
             ("while", While),

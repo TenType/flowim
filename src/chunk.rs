@@ -1,6 +1,23 @@
-pub type Value = f64;
-
 #[derive(Copy, Clone)]
+pub enum Value {
+    Bool(bool),
+    Int(isize),
+    Float(f64),
+}
+
+use std::fmt::{Display, Formatter, Result};
+impl Display for Value {
+    fn fmt(&self, format: &mut Formatter<'_>) -> Result {
+        use Value::*;
+        match self {
+            Bool(value) => write!(format, "{}", value),
+            Int(value) => write!(format, "{}", value),
+            Float(value) => write!(format, "{}", value),
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
 pub enum OpCode {
     Constant(usize),
     Add,
@@ -8,12 +25,15 @@ pub enum OpCode {
     Multiply,
     Divide,
     Negate,
+    Not,
     Return,
+    True,
+    False,
 }
 
 pub struct Chunk {
     length: u8,
-    lines: Vec<usize>,
+    pub lines: Vec<usize>,
     pub constants: Vec<Value>,
     pub code: Vec<OpCode>,
 }
@@ -54,19 +74,23 @@ impl Chunk {
             print!("{:>4} ", self.lines[i]);
         }
 
+        use OpCode::*;
         match instruction {
-            OpCode::Constant(value) => println!(
+            Constant(value) => println!(
                 "{:<16} {:>4} {}",
                 "OP_CONSTANT",
                 value,
                 self.constants[*value as usize] // print_value
             ),
-            OpCode::Add => println!("OP_ADD"),
-            OpCode::Subtract => println!("OP_SUBTRACT"),
-            OpCode::Multiply => println!("OP_MULTIPLY"),
-            OpCode::Divide => println!("OP_DIVIDE"),
-            OpCode::Negate => println!("OP_NEGATE"),
-            OpCode::Return => println!("OP_RETURN"),
+            Add => println!("OP_ADD"),
+            Subtract => println!("OP_SUBTRACT"),
+            Multiply => println!("OP_MULTIPLY"),
+            Divide => println!("OP_DIVIDE"),
+            Negate => println!("OP_NEGATE"),
+            Not => println!("OP_NOT"),
+            Return => println!("OP_RETURN"),
+            True => println!("OP_TRUE"),
+            False => println!("OP_FALSE"),
         }
     }
 }
