@@ -5,7 +5,6 @@ use crate::{
 use std::collections::HashMap;
 
 pub struct Lexer {
-    // code: String,
     chars: Vec<char>,
     start: usize,
     curr: usize,
@@ -14,7 +13,7 @@ pub struct Lexer {
 }
 
 impl Lexer {
-    pub fn new(code: String) -> Self {
+    pub fn new(code: &str) -> Self {
         use TokenType::*;
         let keywords = HashMap::from([
             ("or", Or),
@@ -206,7 +205,7 @@ impl Lexer {
     }
 }
 
-pub fn _lex(code: String) -> Result<(), LangError> {
+pub fn _lex(code: &str) -> Result<(), LangError> {
     let mut lexer = Lexer::new(code);
     let mut line = 0;
     loop {

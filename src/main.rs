@@ -32,7 +32,7 @@ fn _check_result<T>(result: Result<T, LangError>) -> T {
     }
 }
 
-fn run_code(code: String) {
+fn run_code(code: &str) {
     let tokens = compiler::compile(code);
     if let Ok(chunk) = tokens {
         let _ = VM::new(chunk).run();
@@ -41,7 +41,7 @@ fn run_code(code: String) {
 
 fn run_file(path: &str) {
     let code = fs::read_to_string(path).expect("Could not read test file");
-    run_code(code);
+    run_code(&code);
 }
 
 fn repl() {
@@ -55,6 +55,6 @@ fn repl() {
         if line.is_empty() {
             continue;
         }
-        run_code(line);
+        run_code(&line);
     }
 }

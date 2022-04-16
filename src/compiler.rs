@@ -57,7 +57,7 @@ struct Compiler {
 }
 
 impl Compiler {
-    fn new(code: String) -> Self {
+    fn new(code: &str) -> Self {
         use Precedence as P;
         use TokenType::*;
 
@@ -254,7 +254,7 @@ impl Compiler {
     }
 }
 
-pub fn compile(code: String) -> Result<Chunk, LangError> {
+pub fn compile(code: &str) -> Result<Chunk, LangError> {
     let mut compiler = Compiler::new(code);
     let passed = compiler.compile();
     if passed {
