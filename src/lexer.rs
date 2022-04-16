@@ -129,7 +129,7 @@ impl Lexer {
         }
 
         if self.at_end() {
-            return self.make_error("Unterminated string".to_string());
+            return self.make_error(String::from("Unterminated string"));
         }
         self.next();
         self.make_token(TokenType::Str)

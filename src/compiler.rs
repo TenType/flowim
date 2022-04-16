@@ -86,12 +86,12 @@ impl Compiler {
             lexer: Lexer::new(code),
             curr: Token {
                 id: TokenType::Eof,
-                lexeme: "".to_string(),
+                lexeme: String::new(),
                 line: 1,
             },
             prev: Token {
                 id: TokenType::Eof,
-                lexeme: "".to_string(),
+                lexeme: String::new(),
                 line: 1,
             },
             had_error: false,
