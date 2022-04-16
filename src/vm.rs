@@ -48,14 +48,14 @@ impl VM {
         use Value::*;
         let operands = (self.pop(), self.pop());
         let result = match operands {
-            (Int(a), Int(b)) => Int(match operation {
+            (Int(b), Int(a)) => Int(match operation {
                 Add => a + b,
                 Subtract => a - b,
                 Multiply => a * b,
                 Divide => a / b,
                 _ => panic!("Unsupported binary operation: {:?}", operation),
             }),
-            (Float(a), Float(b)) => Float(match operation {
+            (Float(b), Float(a)) => Float(match operation {
                 Add => a + b,
                 Subtract => a - b,
                 Multiply => a * b,
