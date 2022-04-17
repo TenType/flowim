@@ -1,7 +1,4 @@
-use crate::{
-    result::LangError,
-    token::{Token, TokenType},
-};
+use crate::token::{Token, TokenType};
 use std::collections::HashMap;
 
 pub struct Lexer {
@@ -15,6 +12,8 @@ pub struct Lexer {
 impl Lexer {
     pub fn new(code: &str) -> Self {
         use TokenType::*;
+
+        // Update the `keywords` unit test after changing any keywords
         let keywords = HashMap::from([
             ("or", Or),
             ("and", And),
@@ -35,7 +34,9 @@ impl Lexer {
             ("print", Print),
         ]);
 
-        let chars: Vec<char> = code.chars().collect();
+        let mut chars: Vec<char> = code.chars().collect();
+        chars.push('\0');
+
         Lexer {
             chars,
             start: 0,
@@ -205,21 +206,130 @@ impl Lexer {
     }
 }
 
-pub fn _lex(code: &str) -> Result<(), LangError> {
-    let mut lexer = Lexer::new(code);
-    let mut line = 0;
-    loop {
-        let token = lexer.lex_token();
-        if token.line != line {
-            print!("{:>4} ", token.line);
-            line = token.line;
-        } else {
-            print!("   | ");
+#[cfg(test)]
+mod tests {
+    use super::{
+        Lexer,
+        TokenType::{self, *},
+    };
+
+    fn lex(code: &str) -> Vec<TokenType> {
+        let mut lexer = Lexer::new(code);
+        let mut result: Vec<TokenType> = vec![];
+        loop {
+            let token = lexer.lex_token();
+            let id = token.id;
+            result.push(token.id);
+
+            if id == Eof {
+                break;
+            }
         }
-        println!("{:?} {}", token.id, token.lexeme);
-        if token.id == TokenType::Eof {
-            break;
-        }
+        result
     }
-    Ok(())
+
+    #[test]
+    fn unknown_chars() {
+        let expected = vec![Identifier, Error, Error, Bang, Identifier, Error, Eof];
+        let actual = lex("hello~ @! test &");
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn numbers() {
+        let expected = vec![Int, Float, Float, Eof];
+        let actual = lex("345 1.0 1.2");
+        assert_eq!(expected, actual);
+
+        let expected = vec![Int, Dot, Int, Dot, Float, Float, Dot, Int, Eof];
+        let actual = lex("1. 0. 5.5 0.0.5");
+        assert_eq!(expected, actual);
+
+        let expected = vec![Minus, Float, Identifier, Eof];
+        let actual = lex("-3.14a");
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn expressions() {
+        let expected = vec![
+            Int, Slash, Int, Plus, Int, Star, Int, Minus, Minus, Int, Eof,
+        ];
+        let actual = lex("22 / 2 + 42 * 1 - -4");
+        assert_eq!(expected, actual);
+
+        let expected = vec![Float, Star, LeftParen, Int, Plus, Float, RightParen, Eof];
+        let actual = lex("5.5 * (2 + 1.0)");
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn strings() {
+        let expected = vec![Str, Eof];
+        let actual = lex("'single'");
+        assert_eq!(expected, actual);
+
+        let expected = vec![Str, Eof];
+        let actual = lex("\"double\"");
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn unterminated_strings() {
+        let expected = vec![Error, Eof];
+        let actual = lex("'whoops");
+        assert_eq!(expected, actual);
+
+        let expected = vec![Error, Eof];
+        let actual = lex("\"nope");
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn identifiers() {
+        let expected = vec![Identifier, Identifier, Eof];
+        let actual = lex("hello world");
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn keywords() {
+        let expected = vec![
+            Or, And, Not, If, Else, While, For, Var, Let, Fn, Return, Class, Super, SelfKw, True,
+            False, Print, Eof,
+        ];
+        let actual =
+            lex("or and not if else while for var let fn return class super self true false print");
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn skip_whitespace() {
+        let expected = vec![Int, Int, Eof];
+        let actual = lex("1        2");
+        assert_eq!(expected, actual);
+
+        let expected = vec![Int, Int, Eof];
+        let actual = lex("3\n\n\n4");
+        assert_eq!(expected, actual);
+
+        let expected = vec![Int, Int, Eof];
+        let actual = lex("5\t\t6");
+        assert_eq!(expected, actual);
+
+        let expected = vec![Int, Int, Eof];
+        let actual = lex("7\r\r\r\r8");
+        assert_eq!(expected, actual);
+
+        let expected = vec![Int, Int, Int, Eof];
+        let actual = lex("9   \n10   \t \n11\n\n");
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn skip_comments() {
+        let expected = vec![Int, Plus, Int, Eof];
+        let actual = lex("1 + 2 // this is a comment");
+        assert_eq!(expected, actual);
+    }
 }

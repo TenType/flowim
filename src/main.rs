@@ -52,6 +52,7 @@ fn repl() {
         io::stdin()
             .read_line(&mut line)
             .expect("Could not read line from REPL");
+        line.pop(); // pop newline \n
         if line.is_empty() {
             continue;
         }
