@@ -1,4 +1,4 @@
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 pub enum Value {
     Bool(bool),
     Int(isize),
@@ -29,6 +29,9 @@ pub enum OpCode {
     Return,
     True,
     False,
+    Equal,
+    Greater,
+    Less,
 }
 
 pub struct Chunk {
@@ -91,6 +94,9 @@ impl Chunk {
             Return => println!("OP_RETURN"),
             True => println!("OP_TRUE"),
             False => println!("OP_FALSE"),
+            Equal => println!("OP_EQUAL"),
+            Greater => println!("OP_GREATER"),
+            Less => println!("OP_LESS"),
         }
     }
 }

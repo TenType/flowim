@@ -79,6 +79,12 @@ impl Compiler {
             (True, rule(Some(Self::literal), None, P::None)),
             (False, rule(Some(Self::literal), None, P::None)),
             (Not, rule(Some(Self::unary), None, P::None)),
+            (BangEqual, rule(None, Some(Self::binary), P::Equality)),
+            (EqualEqual, rule(None, Some(Self::binary), P::Equality)),
+            (Greater, rule(None, Some(Self::binary), P::Comparison)),
+            (GreaterEqual, rule(None, Some(Self::binary), P::Comparison)),
+            (Less, rule(None, Some(Self::binary), P::Comparison)),
+            (LessEqual, rule(None, Some(Self::binary), P::Comparison)),
         ]);
 
         Self {
@@ -132,6 +138,11 @@ impl Compiler {
         self.chunk.write(op, self.prev.line);
     }
 
+    fn emit_two(&mut self, op1: OpCode, op2: OpCode) {
+        self.chunk.write(op1, self.prev.line);
+        self.chunk.write(op2, self.prev.line);
+    }
+
     fn emit_constant(&mut self, value: Value) {
         let index = self.chunk.add_constant(value);
         self.emit(index);
@@ -181,6 +192,12 @@ impl Compiler {
             Minus => self.emit(Subtract),
             Star => self.emit(Multiply),
             Slash => self.emit(Divide),
+            BangEqual => self.emit_two(OpCode::Equal, OpCode::Not),
+            EqualEqual => self.emit(OpCode::Equal),
+            TokenType::Greater => self.emit(OpCode::Greater),
+            GreaterEqual => self.emit_two(OpCode::Less, OpCode::Not),
+            TokenType::Less => self.emit(OpCode::Less),
+            LessEqual => self.emit_two(OpCode::Greater, OpCode::Not),
             _ => (),
         }
     }

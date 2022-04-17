@@ -44,24 +44,28 @@ impl VM {
     }
 
     fn binary_op(&mut self, operation: OpCode) -> Result<(), LangError> {
-        use OpCode::{Add, Divide, Multiply, Subtract};
+        use OpCode::*;
         use Value::*;
         let operands = (self.pop(), self.pop());
         let result = match operands {
-            (Int(b), Int(a)) => Int(match operation {
-                Add => a + b,
-                Subtract => a - b,
-                Multiply => a * b,
-                Divide => a / b,
+            (Int(b), Int(a)) => match operation {
+                Add => Int(a + b),
+                Subtract => Int(a - b),
+                Multiply => Int(a * b),
+                Divide => Int(a / b),
+                Greater => Bool(a > b),
+                Less => Bool(a < b),
                 _ => panic!("Unsupported binary operation: {:?}", operation),
-            }),
-            (Float(b), Float(a)) => Float(match operation {
-                Add => a + b,
-                Subtract => a - b,
-                Multiply => a * b,
-                Divide => a / b,
+            },
+            (Float(b), Float(a)) => match operation {
+                Add => Float(a + b),
+                Subtract => Float(a - b),
+                Multiply => Float(a * b),
+                Divide => Float(a / b),
+                Greater => Bool(a > b),
+                Less => Bool(a < b),
                 _ => panic!("Unsupported binary operation: {:?}", operation),
-            }),
+            },
             _ => {
                 self.runtime_error("Operands must be both `int` or `float`");
                 return Err(LangError::RuntimeError);
@@ -127,6 +131,13 @@ impl VM {
                 }
                 True => self.push(Value::Bool(true)),
                 False => self.push(Value::Bool(false)),
+                Equal => {
+                    let b = self.pop();
+                    let a = self.pop();
+                    self.push(Value::Bool(a == b));
+                }
+                Greater => self.binary_op(Greater)?,
+                Less => self.binary_op(Less)?,
             }
         }
     }
