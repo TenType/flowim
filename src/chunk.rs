@@ -72,6 +72,7 @@ impl Chunk {
         OpCode::Constant(self.constants.len() - 1)
     }
 
+    #[cfg(debug_assertions)]
     pub fn _disassemble(&self, name: &str) {
         println!("== {} ==", name);
         for (i, instruction) in self.code.iter().enumerate() {
@@ -79,6 +80,7 @@ impl Chunk {
         }
     }
 
+    #[cfg(debug_assertions)]
     pub fn disassemble_op(&self, instruction: &OpCode, i: usize) {
         print!("{:04} ", i);
         if i > 0 && self.lines[i] == self.lines[i - 1] {
@@ -90,21 +92,21 @@ impl Chunk {
         use OpCode::*;
         match instruction {
             Constant(value) => println!(
-                "{:<16} {:>4} {}",
-                "OP_CONSTANT",
+                "{:<16} {:>4} ({})",
+                "LOAD_CONST",
                 value,
                 self.constants[*value as usize] // print_value
             ),
-            Add => println!("OP_ADD"),
-            Subtract => println!("OP_SUBTRACT"),
-            Multiply => println!("OP_MULTIPLY"),
-            Divide => println!("OP_DIVIDE"),
-            Negate => println!("OP_NEGATE"),
-            Not => println!("OP_NOT"),
-            Return => println!("OP_RETURN"),
-            Equal => println!("OP_EQUAL"),
-            Greater => println!("OP_GREATER"),
-            Less => println!("OP_LESS"),
+            Add => println!("ADD"),
+            Subtract => println!("SUBTRACT"),
+            Multiply => println!("MULTIPLY"),
+            Divide => println!("DIVIDE"),
+            Negate => println!("NEGATE"),
+            Not => println!("NOT"),
+            Return => println!("RETURN"),
+            Equal => println!("EQUAL"),
+            Greater => println!("GREATER"),
+            Less => println!("LESS"),
         }
     }
 }

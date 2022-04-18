@@ -116,20 +116,24 @@ impl VM {
         Ok(())
     }
 
+    #[cfg(debug_assertions)]
+    fn disassemble(&self, op: OpCode) {
+        if !self.stack.is_empty() {
+            print!("        |  ");
+            for item in &self.stack {
+                print!("[ {} ]", item);
+            }
+            println!();
+        }
+        self.chunk.disassemble_op(&op, self.ip - 1);
+    }
+
     pub fn run(&mut self) -> Result<(), LangError> {
         loop {
             let op = self.next();
 
-            if cfg!(debug_assertions) {
-                if !self.stack.is_empty() {
-                    print!("          ");
-                    for item in &self.stack {
-                        print!("[ {} ]", item);
-                    }
-                    println!();
-                }
-                self.chunk.disassemble_op(&op, self.ip - 1);
-            }
+            #[cfg(debug_assertions)]
+            self.disassemble(op);
 
             use OpCode::*;
             match op {
