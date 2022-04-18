@@ -108,7 +108,9 @@ impl Compiler {
 
     fn compile(&mut self) -> bool {
         self.next();
-        self.expression();
+        while !self.matches(TokenType::Eof) {
+            self.declaration();
+        }
         self.end_compile();
         self.eat(TokenType::Eof, "Expected to reach the end of the file");
         !self.had_error
@@ -146,6 +148,23 @@ impl Compiler {
     fn emit_constant(&mut self, value: Value) {
         let index = self.chunk.add_constant(value);
         self.emit(index);
+    }
+
+    fn declaration(&mut self) {
+        self.statement();
+    }
+
+    fn statement(&mut self) {
+        if self.matches(TokenType::Print) {
+            self.print_statement();
+        } else {
+            self.expression();
+        }
+    }
+
+    fn print_statement(&mut self) {
+        self.expression();
+        self.emit(OpCode::Print);
     }
 
     fn expression(&mut self) {
@@ -245,6 +264,19 @@ impl Compiler {
             precedence: Precedence::None,
         })
         // .unwrap_or_else(|| panic!("Undefined rule {:?}", id))
+    }
+
+    fn matches(&mut self, id: TokenType) -> bool {
+        if !self.check(id) {
+            false
+        } else {
+            self.next();
+            true
+        }
+    }
+
+    fn check(&self, id: TokenType) -> bool {
+        self.curr.id == id
     }
 
     fn error_curr(&mut self, msg: &str) {

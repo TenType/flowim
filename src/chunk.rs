@@ -42,6 +42,7 @@ pub enum OpCode {
     Equal,
     Greater,
     Less,
+    Print,
 }
 
 pub struct Chunk {
@@ -107,6 +108,7 @@ impl Chunk {
             Equal => println!("EQUAL"),
             Greater => println!("GREATER"),
             Less => println!("LESS"),
+            Print => println!("PRINT"),
         }
     }
 }

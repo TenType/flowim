@@ -174,13 +174,11 @@ impl VM {
                     let v = self.pop();
                     self.push(Value::Bool(self.is_falsy(v)));
                 }
-                Return => {
-                    println!("{}", self.pop());
-                    return Ok(());
-                }
+                Return => return Ok(()),
                 Equal => self.binary_op(Equal)?,
                 Greater => self.binary_op(Greater)?,
                 Less => self.binary_op(Less)?,
+                Print => println!("{}", self.pop()),
             }
         }
     }
