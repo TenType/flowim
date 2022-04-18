@@ -74,11 +74,10 @@ impl Compiler {
             (Plus, rule(None, Some(Self::binary), P::Term)),
             (Slash, rule(None, Some(Self::binary), P::Factor)),
             (Star, rule(None, Some(Self::binary), P::Factor)),
+            (Bool, rule(Some(Self::bool), None, P::None)),
             (Int, rule(Some(Self::int), None, P::None)),
             (Float, rule(Some(Self::float), None, P::None)),
             (Str, rule(Some(Self::string), None, P::None)),
-            (True, rule(Some(Self::literal), None, P::None)),
-            (False, rule(Some(Self::literal), None, P::None)),
             (Not, rule(Some(Self::unary), None, P::None)),
             (BangEqual, rule(None, Some(Self::binary), P::Equality)),
             (EqualEqual, rule(None, Some(Self::binary), P::Equality)),
@@ -153,6 +152,11 @@ impl Compiler {
         self.parse_precedence(Precedence::Assignment);
     }
 
+    fn bool(&mut self) {
+        let value = self.prev.lexeme.parse::<bool>().unwrap();
+        self.emit_constant(Value::Bool(value));
+    }
+
     fn int(&mut self) {
         let value = self.prev.lexeme.parse::<isize>().unwrap();
         self.emit_constant(Value::Int(value));
@@ -208,12 +212,10 @@ impl Compiler {
         }
     }
 
-    fn literal(&mut self) {
-        match self.prev.id {
-            TokenType::False => self.emit(OpCode::False),
-            TokenType::True => self.emit(OpCode::True),
-            _ => (),
-        }
+    fn _literal(&mut self) {
+        // match self.prev.id {
+        //     _ => (),
+        // }
     }
 
     fn parse_precedence(&mut self, precedence: Precedence) {

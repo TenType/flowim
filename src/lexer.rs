@@ -29,8 +29,8 @@ impl Lexer {
             ("class", Class),
             ("super", Super),
             ("self", SelfKw),
-            ("true", True),
-            ("false", False),
+            ("true", Bool),
+            ("false", Bool),
             ("print", Print),
         ]);
 
@@ -293,13 +293,19 @@ mod tests {
     }
 
     #[test]
+    fn booleans() {
+        let expected = vec![Bool, Bool, Eof];
+        let actual = lex("true false");
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
     fn keywords() {
         let expected = vec![
-            Or, And, Not, If, Else, While, For, Var, Let, Fn, Return, Class, Super, SelfKw, True,
-            False, Print, Eof,
+            Or, And, Not, If, Else, While, For, Var, Let, Fn, Return, Class, Super, SelfKw, Print,
+            Eof,
         ];
-        let actual =
-            lex("or and not if else while for var let fn return class super self true false print");
+        let actual = lex("or and not if else while for var let fn return class super self print");
         assert_eq!(expected, actual);
     }
 

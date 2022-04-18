@@ -32,6 +32,7 @@ pub enum TokenType {
     Str,
     Int,
     Float,
+    Bool,
 
     Or,
     And,
@@ -47,8 +48,6 @@ pub enum TokenType {
     Class,
     Super,
     SelfKw,
-    True,
-    False,
     Print,
 
     Error,

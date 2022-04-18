@@ -133,8 +133,8 @@ impl VM {
 
             use OpCode::*;
             match op {
-                Constant(value) => {
-                    let constant = self.chunk.constants[value].clone();
+                Constant(index) => {
+                    let constant = self.chunk.constants[index].clone();
                     self.push(constant);
                 }
 
@@ -168,8 +168,6 @@ impl VM {
                     println!("{}", self.pop());
                     return Ok(());
                 }
-                True => self.push(Value::Bool(true)),
-                False => self.push(Value::Bool(false)),
                 Equal => self.binary_op(Equal)?,
                 Greater => self.binary_op(Greater)?,
                 Less => self.binary_op(Less)?,
