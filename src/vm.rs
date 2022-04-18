@@ -44,8 +44,10 @@ impl VM {
     }
 
     fn binary_op(&mut self, operation: OpCode) -> Result<(), LangError> {
+        use LangError::RuntimeError;
         use OpCode::*;
         use Value::*;
+
         let operands = (self.pop(), self.pop());
         let mut bad_operation = |op: &str,
                                  expected: &str,
@@ -56,8 +58,9 @@ impl VM {
                     type_as_str(actual.0),
                     type_as_str(actual.1)
                 ));
-            Err(LangError::RuntimeError)
+            Err(RuntimeError)
         };
+
         let result = match operation {
             Add => match operands {
                 (Int(b), Int(a)) => Int(a + b),
@@ -76,8 +79,20 @@ impl VM {
                 _ => return bad_operation("*", "int or float", operands),
             },
             Divide => match operands {
-                (Int(b), Int(a)) => Int(a / b),
-                (Float(b), Float(a)) => Float(a / b),
+                (Int(b), Int(a)) => {
+                    if b == 0 {
+                        self.runtime_error("Division by zero");
+                        return Err(RuntimeError);
+                    }
+                    Int(a / b)
+                }
+                (Float(b), Float(a)) => {
+                    if b == 0.0 {
+                        self.runtime_error("Division by zero");
+                        return Err(RuntimeError);
+                    }
+                    Float(a / b)
+                }
                 _ => return bad_operation("/", "int or float", operands),
             },
             Equal => Bool(operands.0 == operands.1),
