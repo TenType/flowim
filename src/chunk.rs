@@ -1,8 +1,9 @@
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum Value {
     Bool(bool),
     Int(isize),
     Float(f64),
+    Str(String),
 }
 
 use std::fmt::{Display, Formatter, Result};
@@ -13,7 +14,18 @@ impl Display for Value {
             Bool(value) => write!(format, "{}", value),
             Int(value) => write!(format, "{}", value),
             Float(value) => write!(format, "{}", value),
+            Str(value) => write!(format, "{}", value),
         }
+    }
+}
+
+pub fn type_as_str<'a>(value: Value) -> &'a str {
+    use Value::*;
+    match value {
+        Bool(_) => "bool",
+        Int(_) => "int",
+        Float(_) => "float",
+        Str(_) => "str",
     }
 }
 

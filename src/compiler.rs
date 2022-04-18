@@ -76,6 +76,7 @@ impl Compiler {
             (Star, rule(None, Some(Self::binary), P::Factor)),
             (Int, rule(Some(Self::int), None, P::None)),
             (Float, rule(Some(Self::float), None, P::None)),
+            (Str, rule(Some(Self::string), None, P::None)),
             (True, rule(Some(Self::literal), None, P::None)),
             (False, rule(Some(Self::literal), None, P::None)),
             (Not, rule(Some(Self::unary), None, P::None)),
@@ -160,6 +161,11 @@ impl Compiler {
     fn float(&mut self) {
         let value = self.prev.lexeme.parse::<f64>().unwrap();
         self.emit_constant(Value::Float(value));
+    }
+
+    fn string(&mut self) {
+        let lexeme = self.prev.lexeme.clone();
+        self.emit_constant(Value::Str(lexeme[1..lexeme.len() - 1].to_string()));
     }
 
     fn group(&mut self) {

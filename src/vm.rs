@@ -1,5 +1,5 @@
 use crate::{
-    chunk::{Chunk, OpCode, Value},
+    chunk::{type_as_str, Chunk, OpCode, Value},
     result::LangError,
 };
 
@@ -33,7 +33,7 @@ impl VM {
     }
 
     fn peek(&self) -> Value {
-        *self.stack.last().expect("Empty stack")
+        self.stack.last().expect("Empty stack").clone()
     }
 
     fn is_falsy(&self, value: Value) -> bool {
@@ -47,29 +47,53 @@ impl VM {
         use OpCode::*;
         use Value::*;
         let operands = (self.pop(), self.pop());
-        let result = match operands {
-            (Int(b), Int(a)) => match operation {
-                Add => Int(a + b),
-                Subtract => Int(a - b),
-                Multiply => Int(a * b),
-                Divide => Int(a / b),
-                Greater => Bool(a > b),
-                Less => Bool(a < b),
-                _ => panic!("Unsupported binary operation: {:?}", operation),
+        let mut bad_operation = |op: &str,
+                                 expected: &str,
+                                 actual: (Value, Value)|
+         -> Result<(), LangError> {
+            self.runtime_error(&format!(
+                    "Operator `{op}` expected two arguments of `{expected}` (of the same type), but found `{}` and `{}`.",
+                    type_as_str(actual.0),
+                    type_as_str(actual.1)
+                ));
+            Err(LangError::RuntimeError)
+        };
+        let result = match operation {
+            Add => match operands {
+                (Int(b), Int(a)) => Int(a + b),
+                (Float(b), Float(a)) => Float(a + b),
+                (Str(b), Str(a)) => Str(a + &b),
+                _ => return bad_operation("+", "int or float or str", operands),
             },
-            (Float(b), Float(a)) => match operation {
-                Add => Float(a + b),
-                Subtract => Float(a - b),
-                Multiply => Float(a * b),
-                Divide => Float(a / b),
-                Greater => Bool(a > b),
-                Less => Bool(a < b),
-                _ => panic!("Unsupported binary operation: {:?}", operation),
+            Subtract => match operands {
+                (Int(b), Int(a)) => Int(a - b),
+                (Float(b), Float(a)) => Float(a - b),
+                _ => return bad_operation("-", "int or float", operands),
             },
-            _ => {
-                self.runtime_error("Operands must be both `int` or `float`");
-                return Err(LangError::RuntimeError);
-            }
+            Multiply => match operands {
+                (Int(b), Int(a)) => Int(a * b),
+                (Float(b), Float(a)) => Float(a * b),
+                _ => return bad_operation("*", "int or float", operands),
+            },
+            Divide => match operands {
+                (Int(b), Int(a)) => Int(a / b),
+                (Float(b), Float(a)) => Float(a / b),
+                _ => return bad_operation("/", "int or float", operands),
+            },
+            Equal => Bool(operands.0 == operands.1),
+            Greater => match operands {
+                (Int(b), Int(a)) => Bool(a > b),
+                (Float(b), Float(a)) => Bool(a > b),
+                (Str(b), Str(a)) => Bool(a > b),
+                _ => return bad_operation(">", "int or float or str", operands),
+            },
+            Less => match operands {
+                (Int(b), Int(a)) => Bool(a < b),
+                (Float(b), Float(a)) => Bool(a < b),
+                (Str(b), Str(a)) => Bool(a < b),
+                _ => return bad_operation("<", "int or float or str", operands),
+            },
+            _ => panic!("Unsupported binary operation: {:?}", operation),
         };
 
         self.push(result);
@@ -95,7 +119,7 @@ impl VM {
             use OpCode::*;
             match op {
                 Constant(value) => {
-                    let constant = self.chunk.constants[value];
+                    let constant = self.chunk.constants[value].clone();
                     self.push(constant);
                 }
 
@@ -131,11 +155,7 @@ impl VM {
                 }
                 True => self.push(Value::Bool(true)),
                 False => self.push(Value::Bool(false)),
-                Equal => {
-                    let b = self.pop();
-                    let a = self.pop();
-                    self.push(Value::Bool(a == b));
-                }
+                Equal => self.binary_op(Equal)?,
                 Greater => self.binary_op(Greater)?,
                 Less => self.binary_op(Less)?,
             }
