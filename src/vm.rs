@@ -48,18 +48,24 @@ impl VM {
         use OpCode::*;
         use Value::*;
 
-        let operands = (self.pop(), self.pop());
+        let mut operands = (self.pop(), self.pop());
         let mut bad_operation = |op: &str,
                                  expected: &str,
                                  actual: (Value, Value)|
          -> Result<(), LangError> {
             self.runtime_error(&format!(
-                    "Operator `{op}` expected two arguments of `{expected}` (of the same type), but found `{}` and `{}`.",
+                    "Cannot use the operator `{op}` with `{}` and `{}`; expected two arguments of `{expected}`.",
                     type_as_str(actual.0),
                     type_as_str(actual.1)
                 ));
             Err(RuntimeError)
         };
+
+        match operands {
+            (Int(x), Float(_)) => operands.0 = Float(x as f64),
+            (Float(_), Int(x)) => operands.1 = Float(x as f64),
+            _ => (),
+        }
 
         let result = match operation {
             Add => match operands {
