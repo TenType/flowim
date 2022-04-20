@@ -43,6 +43,10 @@ pub enum OpCode {
     Greater,
     Less,
     Print,
+    Pop,
+    DefineGlobal(usize),
+    GetGlobal(usize),
+    SetGlobal(usize),
 }
 
 pub struct Chunk {
@@ -73,12 +77,25 @@ impl Chunk {
         OpCode::Constant(self.constants.len() - 1)
     }
 
+    pub fn read_string(&self, index: usize) -> String {
+        if let Value::Str(s) = &self.constants[index] {
+            s.clone()
+        } else {
+            panic!("Constant is not a string");
+        }
+    }
+
     #[cfg(debug_assertions)]
     pub fn _disassemble(&self, name: &str) {
         println!("== {} ==", name);
         for (i, instruction) in self.code.iter().enumerate() {
             self.disassemble_op(instruction, i);
         }
+    }
+
+    #[cfg(debug_assertions)]
+    fn disassemble_constant(&self, name: &str, index: usize) {
+        println!("{:<16} {:>4} ({})", name, index, self.constants[index]);
     }
 
     #[cfg(debug_assertions)]
@@ -92,12 +109,7 @@ impl Chunk {
 
         use OpCode::*;
         match instruction {
-            Constant(value) => println!(
-                "{:<16} {:>4} ({})",
-                "LOAD_CONST",
-                value,
-                self.constants[*value as usize] // print_value
-            ),
+            Constant(index) => self.disassemble_constant("LOAD_CONST", *index),
             Add => println!("ADD"),
             Subtract => println!("SUBTRACT"),
             Multiply => println!("MULTIPLY"),
@@ -109,6 +121,10 @@ impl Chunk {
             Greater => println!("GREATER"),
             Less => println!("LESS"),
             Print => println!("PRINT"),
+            Pop => println!("POP"),
+            DefineGlobal(index) => self.disassemble_constant("DEFINE_GLOBAL", *index),
+            GetGlobal(index) => self.disassemble_constant("GET_GLOBAL", *index),
+            SetGlobal(index) => self.disassemble_constant("SET_GLOBAL", *index),
         }
     }
 }

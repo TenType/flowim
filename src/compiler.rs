@@ -40,9 +40,11 @@ impl Precedence {
     }
 }
 
+type ParseFn = Option<fn(&mut Compiler, can_assign: bool) -> ()>;
+
 struct ParseRule {
-    prefix: Option<fn(&mut Compiler) -> ()>,
-    infix: Option<fn(&mut Compiler) -> ()>,
+    prefix: ParseFn,
+    infix: ParseFn,
     precedence: Precedence,
 }
 
@@ -85,6 +87,7 @@ impl Compiler {
             (GreaterEqual, rule(None, Some(Self::binary), P::Comparison)),
             (Less, rule(None, Some(Self::binary), P::Comparison)),
             (LessEqual, rule(None, Some(Self::binary), P::Comparison)),
+            (Identifier, rule(Some(Self::variable), None, P::None)),
         ]);
 
         Self {
@@ -136,6 +139,12 @@ impl Compiler {
         self.error_curr(message);
     }
 
+    fn eat_delimit(&mut self) {
+        while self.curr.id == TokenType::Semicolon || self.curr.id == TokenType::Newline {
+            self.next();
+        }
+    }
+
     fn emit(&mut self, op: OpCode) {
         self.chunk.write(op, self.prev.line);
     }
@@ -151,15 +160,36 @@ impl Compiler {
     }
 
     fn declaration(&mut self) {
-        self.statement();
+        if self.matches(TokenType::Var) {
+            self.var_declaration();
+        } else {
+            self.statement();
+        }
+
+        if self.panic_mode {
+            self.synchronize();
+        }
+    }
+
+    fn var_declaration(&mut self) {
+        let index = self.parse_variable("Expected a variable name");
+
+        if self.matches(TokenType::Equal) {
+            self.expression();
+        } else {
+            self.error_curr("Expected an expression");
+        }
+        self.eat_delimit();
+        self.emit(OpCode::DefineGlobal(index));
     }
 
     fn statement(&mut self) {
         if self.matches(TokenType::Print) {
             self.print_statement();
         } else {
-            self.expression();
+            self.expression_statement();
         }
+        self.eat_delimit();
     }
 
     fn print_statement(&mut self) {
@@ -167,36 +197,56 @@ impl Compiler {
         self.emit(OpCode::Print);
     }
 
+    fn expression_statement(&mut self) {
+        self.expression();
+        self.emit(OpCode::Pop);
+    }
+
     fn expression(&mut self) {
         self.parse_precedence(Precedence::Assignment);
     }
 
-    fn bool(&mut self) {
+    fn bool(&mut self, _can_assign: bool) {
         let value = self.prev.lexeme.parse::<bool>().unwrap();
         self.emit_constant(Value::Bool(value));
     }
 
-    fn int(&mut self) {
+    fn int(&mut self, _can_assign: bool) {
         let value = self.prev.lexeme.parse::<isize>().unwrap();
         self.emit_constant(Value::Int(value));
     }
 
-    fn float(&mut self) {
+    fn float(&mut self, _can_assign: bool) {
         let value = self.prev.lexeme.parse::<f64>().unwrap();
         self.emit_constant(Value::Float(value));
     }
 
-    fn string(&mut self) {
+    fn string(&mut self, _can_assign: bool) {
         let lexeme = self.prev.lexeme.clone();
         self.emit_constant(Value::Str(lexeme[1..lexeme.len() - 1].to_string()));
     }
 
-    fn group(&mut self) {
+    fn variable(&mut self, can_assign: bool) {
+        self.named_variable(self.prev.clone(), can_assign);
+    }
+
+    fn named_variable(&mut self, name: Token, can_assign: bool) {
+        let index = self.identifier_constant(name);
+
+        if can_assign && self.matches(TokenType::Equal) {
+            self.expression();
+            self.emit(OpCode::SetGlobal(index));
+        } else {
+            self.emit(OpCode::GetGlobal(index));
+        }
+    }
+
+    fn group(&mut self, _can_assign: bool) {
         self.expression();
         self.eat(TokenType::RightParen, "Expected closing parenthesis ')'");
     }
 
-    fn unary(&mut self) {
+    fn unary(&mut self, _can_assign: bool) {
         let operator_id = self.prev.id;
 
         self.parse_precedence(Precedence::Unary);
@@ -208,7 +258,7 @@ impl Compiler {
         }
     }
 
-    fn binary(&mut self) {
+    fn binary(&mut self, _can_assign: bool) {
         let operator_id = self.prev.id;
         let rule = self.get_rule(operator_id).precedence.next();
 
@@ -240,19 +290,22 @@ impl Compiler {
     fn parse_precedence(&mut self, precedence: Precedence) {
         self.next();
         let prefix_rule = self.get_rule(self.prev.id).prefix;
-        if let Some(func) = prefix_rule {
-            func(self);
-        } else {
-            return self.error("Expected expression");
-        }
+
+        let prefix_rule = match prefix_rule {
+            Some(rule) => rule,
+            None => return self.error("Expected expression"),
+        };
+
+        let can_assign = precedence <= Precedence::Assignment;
+        prefix_rule(self, can_assign);
 
         while precedence <= self.get_rule(self.curr.id).precedence {
             self.next();
-            let infix_rule = self.get_rule(self.prev.id).infix;
-            if let Some(func) = infix_rule {
-                func(self);
-            } else {
-                return self.error("Unexpected infix rule call");
+            let infix_rule = self.get_rule(self.prev.id).infix.unwrap();
+            infix_rule(self, can_assign);
+
+            if can_assign && self.matches(TokenType::Equal) {
+                self.error("Invalid assignment target");
             }
         }
     }
@@ -264,6 +317,17 @@ impl Compiler {
             precedence: Precedence::None,
         })
         // .unwrap_or_else(|| panic!("Undefined rule {:?}", id))
+    }
+
+    fn parse_variable(&mut self, message: &str) -> usize {
+        self.eat(TokenType::Identifier, message);
+        self.identifier_constant(self.prev.clone())
+    }
+
+    fn identifier_constant(&mut self, token: Token) -> usize {
+        let name = Value::Str(token.lexeme);
+        self.chunk.add_constant(name);
+        self.chunk.constants.len() - 1
     }
 
     fn matches(&mut self, id: TokenType) -> bool {
@@ -300,6 +364,23 @@ impl Compiler {
             eprint!(" at `{}`", token.lexeme);
         }
         eprintln!(": {}", msg);
+    }
+
+    fn synchronize(&mut self) {
+        use TokenType::*;
+        self.panic_mode = false;
+
+        while self.curr.id != Eof {
+            if self.prev.id == Semicolon || self.prev.id == Newline {
+                return;
+            }
+
+            match self.curr.id {
+                Class | Fn | Var | For | If | While | Print | Return => return,
+                _ => (),
+            }
+            self.next();
+        }
     }
 
     fn end_compile(&mut self) {

@@ -7,11 +7,12 @@ mod vm;
 
 use result::LangError::{self, *};
 use std::{
+    collections::HashMap,
     env, fs,
     io::{self, Write},
     process,
 };
-use vm::VM;
+use vm::{GlobalsType, VM};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -24,7 +25,7 @@ fn main() {
     repl();
 }
 
-fn _check_result<T>(result: Result<T, LangError>) -> T {
+fn check_result<T>(result: Result<T, LangError>) -> T {
     match result {
         Err(CompileError) => process::exit(65),
         Err(RuntimeError) => process::exit(70),
@@ -32,19 +33,22 @@ fn _check_result<T>(result: Result<T, LangError>) -> T {
     }
 }
 
-fn run_code(code: &str) {
+fn run_code(code: &str, globals: GlobalsType) -> Result<GlobalsType, LangError> {
     let tokens = compiler::compile(code);
-    if let Ok(chunk) = tokens {
-        let _ = VM::new(chunk).run();
+    match tokens {
+        Ok(chunk) => VM::new(chunk, globals).run(),
+        Err(error) => Err(error),
     }
 }
 
 fn run_file(path: &str) {
     let code = fs::read_to_string(path).expect("Could not read test file");
-    run_code(&code);
+    let result = run_code(&code, HashMap::new());
+    check_result(result);
 }
 
 fn repl() {
+    let mut globals = HashMap::new();
     loop {
         print!(">>> ");
         io::stdout().flush().unwrap();
@@ -56,6 +60,8 @@ fn repl() {
         if line.is_empty() {
             continue;
         }
-        run_code(&line);
+        if let Ok(new_globals) = run_code(&line, globals.clone()) {
+            globals = new_globals;
+        }
     }
 }

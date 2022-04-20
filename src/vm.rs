@@ -2,19 +2,24 @@ use crate::{
     chunk::{type_as_str, Chunk, OpCode, Value},
     result::LangError,
 };
+use std::collections::HashMap;
+
+pub type GlobalsType = HashMap<String, Value>;
 
 pub struct VM {
     chunk: Chunk,
     ip: usize,
     stack: Vec<Value>,
+    globals: GlobalsType,
 }
 
 impl VM {
-    pub fn new(chunk: Chunk) -> Self {
+    pub fn new(chunk: Chunk, globals: GlobalsType) -> Self {
         Self {
             chunk,
             ip: 0,
             stack: Vec::new(),
+            globals,
         }
     }
 
@@ -134,7 +139,7 @@ impl VM {
         self.chunk.disassemble_op(&op, self.ip - 1);
     }
 
-    pub fn run(&mut self) -> Result<(), LangError> {
+    pub fn run(&mut self) -> Result<GlobalsType, LangError> {
         loop {
             let op = self.next();
 
@@ -174,11 +179,44 @@ impl VM {
                     let v = self.pop();
                     self.push(Value::Bool(self.is_falsy(v)));
                 }
-                Return => return Ok(()),
+                Return => return Ok(self.globals.clone()),
                 Equal => self.binary_op(Equal)?,
                 Greater => self.binary_op(Greater)?,
                 Less => self.binary_op(Less)?,
                 Print => println!("{}", self.pop()),
+
+                Pop => {
+                    self.pop();
+                }
+
+                DefineGlobal(index) => {
+                    let name = self.chunk.read_string(index);
+                    let value = self.pop();
+                    self.globals.insert(name, value);
+                }
+
+                GetGlobal(index) => {
+                    let name = self.chunk.read_string(index);
+                    match self.globals.get(&name) {
+                        Some(value) => {
+                            let v = value.clone();
+                            self.push(v);
+                        }
+                        None => {
+                            self.runtime_error(&format!("`{}` is not defined", name));
+                            return Err(LangError::RuntimeError);
+                        }
+                    }
+                }
+
+                SetGlobal(index) => {
+                    let name = self.chunk.read_string(index);
+                    if self.globals.insert(name.clone(), self.peek()).is_none() {
+                        self.globals.remove(&name);
+                        self.runtime_error(&format!("`{}` is not defined", name));
+                        return Err(LangError::RuntimeError);
+                    }
+                }
             }
         }
     }

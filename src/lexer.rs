@@ -57,6 +57,7 @@ impl Lexer {
         let curr = self.next();
 
         let token = match curr {
+            '\n' => return self.make_newline(),
             '(' => LeftParen,
             ')' => RightParen,
             '{' => LeftBrace,
@@ -107,10 +108,6 @@ impl Lexer {
                 ' ' | '\r' | '\t' => {
                     self.next();
                 }
-                '\n' => {
-                    self.line += 1;
-                    self.next();
-                }
                 '/' if self.peek_next() == '/' => {
                     while self.peek() != '\n' && !self.at_end() {
                         self.next();
@@ -119,6 +116,11 @@ impl Lexer {
                 _ => return,
             }
         }
+    }
+
+    fn make_newline(&mut self) -> Token {
+        self.line += 1;
+        self.make_token(TokenType::Newline)
     }
 
     fn make_string(&mut self, quote: char) -> Token {
@@ -315,7 +317,7 @@ mod tests {
         let actual = lex("1        2");
         assert_eq!(expected, actual);
 
-        let expected = vec![Int, Int, Eof];
+        let expected = vec![Int, Newline, Newline, Newline, Int, Eof];
         let actual = lex("3\n\n\n4");
         assert_eq!(expected, actual);
 
@@ -327,7 +329,7 @@ mod tests {
         let actual = lex("7\r\r\r\r8");
         assert_eq!(expected, actual);
 
-        let expected = vec![Int, Int, Int, Eof];
+        let expected = vec![Int, Newline, Int, Newline, Int, Newline, Newline, Eof];
         let actual = lex("9   \n10   \t \n11\n\n");
         assert_eq!(expected, actual);
     }

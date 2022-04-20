@@ -18,6 +18,7 @@ pub enum TokenType {
     Semicolon,
     Slash,
     Star,
+    Newline,
 
     Bang,
     BangEqual,
