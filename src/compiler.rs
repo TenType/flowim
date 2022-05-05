@@ -391,7 +391,7 @@ impl Compiler {
 
     fn search_locals(&self, name: &Token) -> bool {
         for local in self.locals.iter().rev() {
-            if local.depth.is_none() && local.depth.unwrap() < self.scope_depth {
+            if local.depth.is_some() && local.depth.unwrap() < self.scope_depth {
                 return false;
             }
             if local.name.lexeme == name.lexeme {
