@@ -50,6 +50,8 @@ pub enum TokenType {
     Super,
     SelfKw,
     Print,
+    Do,
+    End,
 
     Error,
     Eof,

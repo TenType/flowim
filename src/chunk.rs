@@ -47,6 +47,8 @@ pub enum OpCode {
     DefineGlobal(usize),
     GetGlobal(usize),
     SetGlobal(usize),
+    GetLocal(usize),
+    SetLocal(usize),
 }
 
 pub struct Chunk {
@@ -125,6 +127,8 @@ impl Chunk {
             DefineGlobal(index) => self.disassemble_constant("DEFINE_GLOBAL", *index),
             GetGlobal(index) => self.disassemble_constant("GET_GLOBAL", *index),
             SetGlobal(index) => self.disassemble_constant("SET_GLOBAL", *index),
+            GetLocal(index) => self.disassemble_constant("GET_LOCAL", *index),
+            SetLocal(index) => self.disassemble_constant("SET_LOCAL", *index),
         }
     }
 }

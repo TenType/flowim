@@ -32,6 +32,8 @@ impl Lexer {
             ("true", Bool),
             ("false", Bool),
             ("print", Print),
+            ("do", Do),
+            ("end", End),
         ]);
 
         let mut chars: Vec<char> = code.chars().collect();
@@ -305,9 +307,10 @@ mod tests {
     fn keywords() {
         let expected = vec![
             Or, And, Not, If, Else, While, For, Var, Let, Fn, Return, Class, Super, SelfKw, Print,
-            Eof,
+            Do, End, Eof,
         ];
-        let actual = lex("or and not if else while for var let fn return class super self print");
+        let actual =
+            lex("or and not if else while for var let fn return class super self print do end");
         assert_eq!(expected, actual);
     }
 

@@ -217,6 +217,14 @@ impl VM {
                         return Err(LangError::RuntimeError);
                     }
                 }
+
+                GetLocal(index) => {
+                    self.push(self.stack[index].clone());
+                }
+
+                SetLocal(index) => {
+                    self.stack[index] = self.peek();
+                }
             }
         }
     }
