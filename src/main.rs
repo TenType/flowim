@@ -22,7 +22,6 @@ fn main() {
         2 => run_file(&args[1]),
         _ => process::exit(64),
     }
-    repl();
 }
 
 fn check_result<T>(result: Result<T, LangError>) -> T {
