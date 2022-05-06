@@ -20,7 +20,10 @@ fn main() {
     match args.len() {
         1 => repl(),
         2 => run_file(&args[1]),
-        _ => process::exit(64),
+        _ => {
+            eprintln!("Invalid arguments provided");
+            process::exit(64);
+        }
     }
 }
 
