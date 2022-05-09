@@ -1,0 +1,5 @@
+print 'Hello world!' //> Hello world!
+print "Hello world!" //> Hello world!
+
+// Non-ASCII
+print '你好世界!' //> 你好世界!
