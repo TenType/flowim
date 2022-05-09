@@ -13,7 +13,13 @@ impl Display for Value {
         match self {
             Bool(value) => write!(format, "{}", value),
             Int(value) => write!(format, "{}", value),
-            Float(value) => write!(format, "{:.1}", value),
+            Float(value) => {
+                if value.floor() == *value {
+                    write!(format, "{}.0", value)
+                } else {
+                    write!(format, "{}", value)
+                }
+            }
             Str(value) => write!(format, "{}", value),
         }
     }
