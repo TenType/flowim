@@ -1,0 +1,6 @@
+var a = 'foo'
+print a //> foo
+
+do
+    print a //> foo
+end

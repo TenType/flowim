@@ -1,0 +1,10 @@
+var a = 'global'
+do
+    var a = 'outer'
+    do
+        var a = 'inner'
+        print a //> inner
+    end
+    print a //> outer
+end
+print a //> global

@@ -1,0 +1,13 @@
+do
+    var a = 'foo'
+    print a //> foo
+
+    do
+        print a //> foo
+    end
+end
+
+do
+    var a = 'bar'
+    print a //> bar
+end
