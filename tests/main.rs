@@ -39,7 +39,7 @@ fn parse_comments(contents: &str) -> Expected {
     expected
 }
 
-#[test_resources("tests/*/*.flwm")]
+#[test_resources("tests/**/*.flwm")]
 fn run(resource: &str) {
     let contents = fs::read_to_string(resource).expect("Could not read test file");
 
