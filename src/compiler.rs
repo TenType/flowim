@@ -238,7 +238,7 @@ impl Compiler {
             Err(_) => {
                 return self.error(&format!(
                     "Integer is out of the range {}..{}",
-                    isize::MIN,
+                    isize::MIN + 1,
                     isize::MAX
                 ))
             }
