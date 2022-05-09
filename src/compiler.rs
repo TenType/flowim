@@ -233,7 +233,17 @@ impl Compiler {
     }
 
     fn int(&mut self, _can_assign: bool) {
-        let value = self.prev.lexeme.parse::<isize>().unwrap();
+        let value = match self.prev.lexeme.parse::<isize>() {
+            Ok(v) => v,
+            Err(_) => {
+                return self.error(&format!(
+                    "Integer is out of the range {}..{}",
+                    isize::MIN,
+                    isize::MAX
+                ))
+            }
+        };
+
         self.emit_constant(Value::Int(value));
     }
 
