@@ -1,0 +1,12 @@
+print not true //> false
+print not false //> true
+
+print not not true //> true
+print not not false //> false
+
+print not 1 //> false
+print not 0 //> false
+print not -1 //> false
+
+print not '' //> false
+print not 'false' //> false

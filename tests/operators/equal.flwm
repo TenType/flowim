@@ -1,0 +1,19 @@
+print 1 == 2 //> false
+print 2 == 1 //> false
+print 1 == 1 //> true
+print 0 == -0 //> true
+print -0 == 0 //> true
+
+print true == true //> true
+print true == false //> false
+print false == true //> false
+print false == false //> true
+
+print 'foo' == 'foo' //> true
+print 'foo' == 'bar' //> false
+
+print false == 0 //> false
+print false == -1 //> false
+print false == '' //> false
+print false == 'false' //> false
+print 0 == '0' //> false

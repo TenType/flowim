@@ -1,0 +1,5 @@
+print 1 < 2 //> true
+print 2 < 1 //> false
+print 1 < 1 //> false
+print 0 < -0 //> false
+print -0 < 0 //> false
