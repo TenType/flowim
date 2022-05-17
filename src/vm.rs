@@ -189,6 +189,16 @@ impl VM {
                     self.pop();
                 }
 
+                Jump(index) => {
+                    self.ip += index;
+                }
+
+                JumpIfFalse(index) => {
+                    if self.is_falsy(self.peek()) {
+                        self.ip += index;
+                    }
+                }
+
                 DefineGlobal(index) => {
                     let name = self.chunk.read_string(index);
                     let value = self.pop();

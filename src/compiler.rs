@@ -158,6 +158,11 @@ impl Compiler {
         self.chunk.write(op, self.prev.line);
     }
 
+    fn emit_with_index(&mut self, op: OpCode) -> usize {
+        self.chunk.write(op, self.prev.line);
+        self.chunk.code.len() - 1
+    }
+
     fn emit_two(&mut self, op1: OpCode, op2: OpCode) {
         self.chunk.write(op1, self.prev.line);
         self.chunk.write(op2, self.prev.line);
@@ -166,6 +171,15 @@ impl Compiler {
     fn emit_constant(&mut self, value: Value) {
         let index = self.chunk.add_constant(value);
         self.emit(index);
+    }
+
+    fn patch_jump(&mut self, index: usize) {
+        let jump = self.chunk.code.len() - index - 1;
+        match self.chunk.code[index] {
+            OpCode::Jump(ref mut x) => *x = jump,
+            OpCode::JumpIfFalse(ref mut x) => *x = jump,
+            _ => unreachable!(),
+        }
     }
 
     fn declaration(&mut self) {
@@ -195,6 +209,8 @@ impl Compiler {
     fn statement(&mut self) {
         if self.matches(TokenType::Print) {
             self.print_statement();
+        } else if self.matches(TokenType::If) {
+            self.if_statement();
         } else if self.matches(TokenType::Do) {
             self.eat_delimit();
             self.begin_scope();
@@ -211,6 +227,25 @@ impl Compiler {
         self.emit(OpCode::Print);
     }
 
+    fn if_statement(&mut self) {
+        self.expression();
+        self.eat_delimit();
+
+        let then_index = self.emit_with_index(OpCode::JumpIfFalse(usize::MAX));
+        self.emit(OpCode::Pop);
+
+        self.if_block();
+
+        let else_index = self.emit_with_index(OpCode::Jump(usize::MAX));
+        self.patch_jump(then_index);
+        self.emit(OpCode::Pop);
+
+        if self.matches(TokenType::Else) {
+            self.if_block();
+        }
+        self.patch_jump(else_index);
+    }
+
     fn expression_statement(&mut self) {
         self.expression();
         self.emit(OpCode::Pop);
@@ -225,6 +260,23 @@ impl Compiler {
             self.declaration();
         }
         self.eat(TokenType::End, "Expected 'end' after block");
+    }
+
+    fn if_block(&mut self) {
+        self.eat_delimit();
+        self.begin_scope();
+
+        while !self.check(TokenType::Else)
+            && !self.check(TokenType::End)
+            && !self.check(TokenType::Eof)
+        {
+            self.declaration();
+        }
+        if self.curr.id != TokenType::Else {
+            self.eat(TokenType::End, "Expected 'end' after if block'");
+        }
+
+        self.end_scope();
     }
 
     fn bool(&mut self, _can_assign: bool) {

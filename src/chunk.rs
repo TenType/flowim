@@ -50,6 +50,8 @@ pub enum OpCode {
     Less,
     Print,
     Pop,
+    Jump(usize),
+    JumpIfFalse(usize),
     DefineGlobal(usize),
     GetGlobal(usize),
     SetGlobal(usize),
@@ -107,6 +109,11 @@ impl Chunk {
     }
 
     #[cfg(debug_assertions)]
+    fn disassemble_jump(&self, name: &str, index: usize) {
+        println!("{:<16} {:>4}", name, index);
+    }
+
+    #[cfg(debug_assertions)]
     pub fn disassemble_op(&self, instruction: &OpCode, i: usize) {
         print!("{:04} ", i);
         if i > 0 && self.lines[i] == self.lines[i - 1] {
@@ -130,6 +137,8 @@ impl Chunk {
             Less => println!("LESS"),
             Print => println!("PRINT"),
             Pop => println!("POP"),
+            Jump(index) => self.disassemble_jump("JUMP", *index),
+            JumpIfFalse(index) => self.disassemble_jump("JUMP_IF_FALSE", *index),
             DefineGlobal(index) => self.disassemble_constant("DEFINE_GLOBAL", *index),
             GetGlobal(index) => self.disassemble_constant("GET_GLOBAL", *index),
             SetGlobal(index) => self.disassemble_constant("SET_GLOBAL", *index),

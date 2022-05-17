@@ -1,0 +1,11 @@
+if true
+    print 'good' //> good
+else
+    print 'bad'
+end
+
+if false
+    print 'bad'
+else
+    print 'good' //> good
+end

@@ -1,0 +1,11 @@
+var a = 'foo'
+
+if true
+    print a //> foo
+    var a = 'bar'
+    print a //> bar
+else
+    var a = 'baz'
+end
+
+print a //> foo

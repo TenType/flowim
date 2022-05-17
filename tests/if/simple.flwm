@@ -1,0 +1,9 @@
+if true
+    print 'hello' //> hello
+    print 'world' //> world
+end
+
+if false
+    print 'skip'
+    print 'bad'
+end
