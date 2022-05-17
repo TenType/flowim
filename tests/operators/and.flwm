@@ -1,0 +1,4 @@
+print true and true //> true
+print true and false //> false
+print false and true //> false
+print false and false //> false

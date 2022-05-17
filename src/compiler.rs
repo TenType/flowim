@@ -88,6 +88,8 @@ impl Compiler {
             (Float, rule(Some(Self::float), None, P::None)),
             (Str, rule(Some(Self::string), None, P::None)),
             (Not, rule(Some(Self::unary), None, P::None)),
+            (And, rule(None, Some(Self::and_op), P::And)),
+            (Or, rule(None, Some(Self::or_op), P::Or)),
             (BangEqual, rule(None, Some(Self::binary), P::Equality)),
             (EqualEqual, rule(None, Some(Self::binary), P::Equality)),
             (Greater, rule(None, Some(Self::binary), P::Comparison)),
@@ -380,6 +382,26 @@ impl Compiler {
             LessEqual => self.emit_two(OpCode::Greater, OpCode::Not),
             _ => (),
         }
+    }
+
+    fn and_op(&mut self, _can_assign: bool) {
+        let index = self.emit_with_index(OpCode::JumpIfFalse(usize::MAX));
+
+        self.emit(OpCode::Pop);
+        self.parse_precedence(Precedence::And);
+
+        self.patch_jump(index);
+    }
+
+    fn or_op(&mut self, _can_assign: bool) {
+        let else_index = self.emit_with_index(OpCode::JumpIfFalse(usize::MAX));
+        let end_index = self.emit_with_index(OpCode::Jump(usize::MAX));
+
+        self.patch_jump(else_index);
+        self.emit(OpCode::Pop);
+
+        self.parse_precedence(Precedence::Or);
+        self.patch_jump(end_index);
     }
 
     fn _literal(&mut self) {
