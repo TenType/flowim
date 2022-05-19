@@ -6,6 +6,8 @@ use crate::{
 };
 use std::collections::HashMap;
 
+const JUMP_PLACEHOLDER: usize = usize::MAX;
+
 #[derive(PartialEq, PartialOrd)]
 enum Precedence {
     None,
@@ -235,12 +237,12 @@ impl Compiler {
         self.expression();
         self.eat_delimit();
 
-        let then_index = self.emit_with_index(OpCode::JumpIfFalse(usize::MAX));
+        let then_index = self.emit_with_index(OpCode::JumpIfFalse(JUMP_PLACEHOLDER));
         self.emit(OpCode::Pop);
 
         self.if_block();
 
-        let else_index = self.emit_with_index(OpCode::Jump(usize::MAX));
+        let else_index = self.emit_with_index(OpCode::Jump(JUMP_PLACEHOLDER));
         self.patch_jump(then_index);
         self.emit(OpCode::Pop);
 
@@ -256,7 +258,7 @@ impl Compiler {
         self.expression();
         self.eat_delimit();
 
-        let exit_index = self.emit_with_index(OpCode::JumpIfFalse(usize::MAX));
+        let exit_index = self.emit_with_index(OpCode::JumpIfFalse(JUMP_PLACEHOLDER));
         self.emit(OpCode::Pop);
 
         self.begin_scope();
@@ -407,7 +409,7 @@ impl Compiler {
     }
 
     fn and_op(&mut self, _can_assign: bool) {
-        let index = self.emit_with_index(OpCode::JumpIfFalse(usize::MAX));
+        let index = self.emit_with_index(OpCode::JumpIfFalse(JUMP_PLACEHOLDER));
 
         self.emit(OpCode::Pop);
         self.parse_precedence(Precedence::And);
@@ -416,8 +418,8 @@ impl Compiler {
     }
 
     fn or_op(&mut self, _can_assign: bool) {
-        let else_index = self.emit_with_index(OpCode::JumpIfFalse(usize::MAX));
-        let end_index = self.emit_with_index(OpCode::Jump(usize::MAX));
+        let else_index = self.emit_with_index(OpCode::JumpIfFalse(JUMP_PLACEHOLDER));
+        let end_index = self.emit_with_index(OpCode::Jump(JUMP_PLACEHOLDER));
 
         self.patch_jump(else_index);
         self.emit(OpCode::Pop);
