@@ -1,0 +1,14 @@
+var a = 'foo'
+var i = 0
+
+while i < 3
+    print a
+    var a = 'bar'
+    i = i + 1
+end
+
+//> foo
+//> foo
+//> foo
+
+print a //> foo

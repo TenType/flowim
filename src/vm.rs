@@ -199,6 +199,10 @@ impl VM {
                     }
                 }
 
+                JumpBack(index) => {
+                    self.ip -= index;
+                }
+
                 DefineGlobal(index) => {
                     let name = self.chunk.read_string(index);
                     let value = self.pop();

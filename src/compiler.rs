@@ -213,6 +213,8 @@ impl Compiler {
             self.print_statement();
         } else if self.matches(TokenType::If) {
             self.if_statement();
+        } else if self.matches(TokenType::While) {
+            self.while_statement();
         } else if self.matches(TokenType::Do) {
             self.eat_delimit();
             self.begin_scope();
@@ -246,6 +248,26 @@ impl Compiler {
             self.if_block();
         }
         self.patch_jump(else_index);
+    }
+
+    fn while_statement(&mut self) {
+        let start = self.chunk.code.len() - 1;
+
+        self.expression();
+        self.eat_delimit();
+
+        let exit_index = self.emit_with_index(OpCode::JumpIfFalse(usize::MAX));
+        self.emit(OpCode::Pop);
+
+        self.begin_scope();
+        self.block();
+        self.end_scope();
+
+        let back_index = self.chunk.code.len() - start;
+        self.emit(OpCode::JumpBack(back_index));
+
+        self.patch_jump(exit_index);
+        self.emit(OpCode::Pop);
     }
 
     fn expression_statement(&mut self) {
