@@ -177,12 +177,21 @@ impl Compiler {
         self.emit(index);
     }
 
+    fn chunk_len(&self) -> usize {
+        self.chunk.code.len()
+    }
+
+    fn emit_jump_back(&mut self, index: usize) {
+        let jump_index = self.chunk.code.len() - index + 1;
+        self.emit(OpCode::JumpBack(jump_index));
+    }
+
     fn patch_jump(&mut self, index: usize) {
         let jump = self.chunk.code.len() - index - 1;
         match self.chunk.code[index] {
             OpCode::Jump(ref mut x) => *x = jump,
             OpCode::JumpIfFalse(ref mut x) => *x = jump,
-            _ => unreachable!(),
+            op => panic!("Attempt to patch a jump with unsupported OpCode: {:?}", op),
         }
     }
 
@@ -217,11 +226,11 @@ impl Compiler {
             self.if_statement();
         } else if self.matches(TokenType::While) {
             self.while_statement();
+        } else if self.matches(TokenType::For) {
+            self.for_statement();
         } else if self.matches(TokenType::Do) {
             self.eat_delimit();
-            self.begin_scope();
-            self.block();
-            self.end_scope();
+            self.scope_block();
         } else {
             self.expression_statement();
         }
@@ -253,7 +262,7 @@ impl Compiler {
     }
 
     fn while_statement(&mut self) {
-        let start = self.chunk.code.len() - 1;
+        let start = self.chunk_len();
 
         self.expression();
         self.eat_delimit();
@@ -261,15 +270,59 @@ impl Compiler {
         let exit_index = self.emit_with_index(OpCode::JumpIfFalse(JUMP_PLACEHOLDER));
         self.emit(OpCode::Pop);
 
-        self.begin_scope();
-        self.block();
-        self.end_scope();
+        self.scope_block();
 
-        let back_index = self.chunk.code.len() - start;
-        self.emit(OpCode::JumpBack(back_index));
+        self.emit_jump_back(start);
 
         self.patch_jump(exit_index);
         self.emit(OpCode::Pop);
+    }
+
+    fn for_statement(&mut self) {
+        self.begin_scope();
+
+        if self.matches(TokenType::Semicolon) {
+            // No initializer
+        } else if self.matches(TokenType::Var) {
+            self.var_declaration();
+        } else {
+            self.expression_statement();
+        }
+
+        let mut start = self.chunk_len();
+        let mut exit_index = None;
+
+        if !self.matches(TokenType::Semicolon) {
+            self.expression();
+            self.eat(TokenType::Semicolon, "Expected a semicolon ';'");
+
+            exit_index = Some(self.emit_with_index(OpCode::JumpIfFalse(JUMP_PLACEHOLDER)));
+            self.emit(OpCode::Pop);
+        }
+
+        if !self.matches_delimit() {
+            let body_index = self.emit_with_index(OpCode::Jump(JUMP_PLACEHOLDER));
+            let increment_start = self.chunk_len();
+            self.expression();
+            self.emit(OpCode::Pop);
+            self.eat_delimit();
+
+            self.emit_jump_back(start);
+
+            start = increment_start;
+            self.patch_jump(body_index);
+        }
+
+        self.scope_block();
+
+        self.emit_jump_back(start);
+
+        if let Some(index) = exit_index {
+            self.patch_jump(index);
+            self.emit(OpCode::Pop);
+        }
+
+        self.end_scope();
     }
 
     fn expression_statement(&mut self) {
@@ -286,6 +339,12 @@ impl Compiler {
             self.declaration();
         }
         self.eat(TokenType::End, "Expected 'end' after block");
+    }
+
+    fn scope_block(&mut self) {
+        self.begin_scope();
+        self.block();
+        self.end_scope();
     }
 
     fn if_block(&mut self) {
@@ -526,11 +585,20 @@ impl Compiler {
     }
 
     fn matches(&mut self, id: TokenType) -> bool {
-        if !self.check(id) {
-            false
-        } else {
+        if self.check(id) {
             self.next();
             true
+        } else {
+            false
+        }
+    }
+
+    fn matches_delimit(&mut self) -> bool {
+        if self.check(TokenType::Semicolon) || self.check(TokenType::Newline) {
+            self.next();
+            true
+        } else {
+            false
         }
     }
 

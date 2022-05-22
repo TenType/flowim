@@ -1,0 +1,12 @@
+var a = 'foo'
+
+for var i = 0; i < 3; i = i + 1
+    print a
+    var a = 'bar'
+end
+
+//> foo
+//> foo
+//> foo
+
+print a //> foo
