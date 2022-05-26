@@ -1,32 +1,42 @@
 use crate::{
-    chunk::{type_as_str, Chunk, OpCode, Value},
+    chunk::{type_as_str, OpCode, Value},
+    objects::Function,
     result::LangError,
 };
 use std::collections::HashMap;
 
 pub type GlobalsType = HashMap<String, Value>;
 
+#[derive(Clone)]
+struct CallFrame {
+    function: Function,
+    counter: usize,
+    index: usize,
+}
+
+impl CallFrame {
+    fn new(function: Function) -> Self {
+        CallFrame {
+            function,
+            counter: 0,
+            index: 0,
+        }
+    }
+}
+
 pub struct VM {
-    chunk: Chunk,
-    ip: usize,
+    frames: Vec<CallFrame>,
     stack: Vec<Value>,
     globals: GlobalsType,
 }
 
 impl VM {
-    pub fn new(chunk: Chunk, globals: GlobalsType) -> Self {
+    pub fn new(globals: GlobalsType) -> Self {
         Self {
-            chunk,
-            ip: 0,
+            frames: Vec::new(),
             stack: Vec::new(),
             globals,
         }
-    }
-
-    fn next(&mut self) -> OpCode {
-        let instruction = self.chunk.code[self.ip];
-        self.ip += 1;
-        instruction
     }
 
     fn push(&mut self, value: Value) {
@@ -48,17 +58,31 @@ impl VM {
         }
     }
 
+    fn read_constant(&self, frame: &CallFrame, index: usize) -> Value {
+        frame.function.chunk.constants[index].clone()
+    }
+
+    fn read_string(&self, frame: &CallFrame, index: usize) -> String {
+        if let Value::Str(s) = self.read_constant(frame, index) {
+            s.clone()
+        } else {
+            panic!("Constant is not a string");
+        }
+    }
+
     fn binary_op(&mut self, operation: OpCode) -> Result<(), LangError> {
         use LangError::RuntimeError;
         use OpCode::*;
         use Value::*;
+
+        let frame = self.frames.last().cloned().expect("No frames found");
 
         let mut operands = (self.pop(), self.pop());
         let mut bad_operation = |op: &str,
                                  expected: &str,
                                  actual: (Value, Value)|
          -> Result<(), LangError> {
-            self.runtime_error(&format!(
+            self.runtime_error(&frame, &format!(
                     "Cannot use the operator `{op}` with `{}` and `{}`; expected two arguments of `{expected}`.",
                     type_as_str(actual.0),
                     type_as_str(actual.1)
@@ -92,14 +116,14 @@ impl VM {
             Divide => match operands {
                 (Int(b), Int(a)) => {
                     if b == 0 {
-                        self.runtime_error("Division by zero");
+                        self.runtime_error(&frame, "Division by zero");
                         return Err(RuntimeError);
                     }
                     Int(a / b)
                 }
                 (Float(b), Float(a)) => {
                     if b == 0.0 {
-                        self.runtime_error("Division by zero");
+                        self.runtime_error(&frame, "Division by zero");
                         return Err(RuntimeError);
                     }
                     Float(a / b)
@@ -128,7 +152,7 @@ impl VM {
     }
 
     #[cfg(debug_assertions)]
-    fn disassemble(&self, op: OpCode) {
+    fn disassemble(&self, frame: &CallFrame, op: OpCode) {
         if !self.stack.is_empty() {
             print!("        |  ");
             for item in &self.stack {
@@ -136,20 +160,25 @@ impl VM {
             }
             println!();
         }
-        self.chunk.disassemble_op(&op, self.ip - 1);
+        frame.function.chunk.disassemble_op(&op, frame.counter - 1);
     }
 
-    pub fn run(&mut self) -> Result<GlobalsType, LangError> {
+    pub fn run(&mut self, function: Function) -> Result<GlobalsType, LangError> {
+        let mut frame = CallFrame::new(function);
+        self.frames.push(frame.clone());
+
         loop {
-            let op = self.next();
+            let op = frame.clone().function.chunk.code[frame.counter];
+
+            frame.counter += 1;
 
             #[cfg(debug_assertions)]
-            self.disassemble(op);
+            self.disassemble(&frame, op);
 
             use OpCode::*;
             match op {
                 Constant(index) => {
-                    let constant = self.chunk.constants[index].clone();
+                    let constant = self.read_constant(&frame, index);
                     self.push(constant);
                 }
 
@@ -168,10 +197,10 @@ impl VM {
                         self.push(Value::Float(-value));
                     }
                     value => {
-                        self.runtime_error(&format!(
-                            "Operand of {} must be an `int` or `float`",
-                            value
-                        ));
+                        self.runtime_error(
+                            &frame,
+                            &format!("Operand of {} must be an `int` or `float`", value),
+                        );
                         return Err(LangError::RuntimeError);
                     }
                 },
@@ -190,62 +219,62 @@ impl VM {
                 }
 
                 Jump(index) => {
-                    self.ip += index;
+                    frame.counter += index;
                 }
 
                 JumpIfFalse(index) => {
                     if self.is_falsy(self.peek()) {
-                        self.ip += index;
+                        frame.counter += index;
                     }
                 }
 
                 JumpBack(index) => {
-                    self.ip -= index;
+                    frame.counter -= index;
                 }
 
                 DefineGlobal(index) => {
-                    let name = self.chunk.read_string(index);
+                    let name = self.read_string(&frame, index);
                     let value = self.pop();
                     self.globals.insert(name, value);
                 }
 
                 GetGlobal(index) => {
-                    let name = self.chunk.read_string(index);
+                    let name = self.read_string(&frame, index);
                     match self.globals.get(&name) {
                         Some(value) => {
                             let v = value.clone();
                             self.push(v);
                         }
                         None => {
-                            self.runtime_error(&format!("`{}` is not defined", name));
+                            self.runtime_error(&frame, &format!("`{}` is not defined", name));
                             return Err(LangError::RuntimeError);
                         }
                     }
                 }
 
                 SetGlobal(index) => {
-                    let name = self.chunk.read_string(index);
+                    let name = self.read_string(&frame, index);
                     if self.globals.insert(name.clone(), self.peek()).is_none() {
                         self.globals.remove(&name);
-                        self.runtime_error(&format!("`{}` is not defined", name));
+                        self.runtime_error(&frame, &format!("`{}` is not defined", name));
                         return Err(LangError::RuntimeError);
                     }
                 }
 
                 GetLocal(index) => {
-                    self.push(self.stack[index].clone());
+                    self.push(self.stack[index + frame.index].clone());
                 }
 
                 SetLocal(index) => {
-                    self.stack[index] = self.peek();
+                    self.stack[index + frame.index] = self.peek();
                 }
             }
         }
     }
 
-    fn runtime_error(&mut self, msg: &str) {
+    fn runtime_error(&mut self, frame: &CallFrame, msg: &str) {
         eprintln!("{}", msg);
-        let line = self.chunk.lines[self.ip - 1];
+        let line = frame.function.chunk.lines[frame.counter - 1];
         eprintln!("[line {}] in script", line);
     }
 }

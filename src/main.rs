@@ -1,6 +1,7 @@
 mod chunk;
 mod compiler;
 mod lexer;
+mod objects;
 mod result;
 mod token;
 mod vm;
@@ -38,7 +39,7 @@ fn check_result<T>(result: Result<T, LangError>) -> T {
 fn run_code(code: &str, globals: GlobalsType) -> Result<GlobalsType, LangError> {
     let tokens = compiler::compile(code);
     match tokens {
-        Ok(chunk) => VM::new(chunk, globals).run(),
+        Ok(function) => VM::new(globals).run(function),
         Err(error) => Err(error),
     }
 }

@@ -60,6 +60,7 @@ pub enum OpCode {
     SetLocal(usize),
 }
 
+#[derive(Clone)]
 pub struct Chunk {
     pub lines: Vec<usize>,
     pub constants: Vec<Value>,
@@ -83,14 +84,6 @@ impl Chunk {
     pub fn add_constant(&mut self, value: Value) -> OpCode {
         self.constants.push(value);
         OpCode::Constant(self.constants.len() - 1)
-    }
-
-    pub fn read_string(&self, index: usize) -> String {
-        if let Value::Str(s) = &self.constants[index] {
-            s.clone()
-        } else {
-            panic!("Constant is not a string");
-        }
     }
 
     #[cfg(debug_assertions)]

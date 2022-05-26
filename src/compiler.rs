@@ -1,6 +1,7 @@
 use crate::{
-    chunk::{Chunk, OpCode, Value},
+    chunk::{OpCode, Value},
     lexer::Lexer,
+    objects::{Function, FunctionType},
     result::LangError,
     token::{Token, TokenType},
 };
@@ -55,16 +56,32 @@ struct Local {
     depth: Option<usize>,
 }
 
+struct Level {
+    function: Function,
+    function_type: FunctionType,
+    locals: Vec<Local>,
+    scope_depth: usize,
+}
+
+impl Level {
+    fn new() -> Self {
+        Level {
+            function: Function::new(),
+            function_type: FunctionType::Script,
+            locals: Vec::new(),
+            scope_depth: 0,
+        }
+    }
+}
+
 struct Compiler {
-    chunk: Chunk,
+    level: Level,
     lexer: Lexer,
     curr: Token,
     prev: Token,
     had_error: bool,
     panic_mode: bool,
     rules: HashMap<TokenType, ParseRule>,
-    locals: Vec<Local>,
-    scope_depth: usize,
 }
 
 impl Compiler {
@@ -101,8 +118,8 @@ impl Compiler {
             (Identifier, rule(Some(Self::variable), None, P::None)),
         ]);
 
-        Self {
-            chunk: Chunk::new(),
+        Compiler {
+            level: Level::new(),
             lexer: Lexer::new(code),
             curr: Token {
                 id: TokenType::Eof,
@@ -117,19 +134,22 @@ impl Compiler {
             had_error: false,
             panic_mode: false,
             rules,
-            locals: Vec::new(),
-            scope_depth: 0,
         }
     }
 
-    fn compile(&mut self) -> bool {
+    fn compile(&mut self) -> Result<Function, LangError> {
         self.next();
         while !self.matches(TokenType::Eof) {
             self.declaration();
         }
         self.end_compile();
         self.eat(TokenType::Eof, "Expected to reach the end of the file");
-        !self.had_error
+
+        if self.had_error {
+            Err(LangError::CompileError)
+        } else {
+            Ok(self.level.function.clone())
+        }
     }
 
     fn next(&mut self) {
@@ -159,36 +179,36 @@ impl Compiler {
     }
 
     fn emit(&mut self, op: OpCode) {
-        self.chunk.write(op, self.prev.line);
+        self.level.function.chunk.write(op, self.prev.line);
     }
 
     fn emit_with_index(&mut self, op: OpCode) -> usize {
-        self.chunk.write(op, self.prev.line);
-        self.chunk.code.len() - 1
+        self.level.function.chunk.write(op, self.prev.line);
+        self.level.function.chunk.code.len() - 1
     }
 
     fn emit_two(&mut self, op1: OpCode, op2: OpCode) {
-        self.chunk.write(op1, self.prev.line);
-        self.chunk.write(op2, self.prev.line);
+        self.level.function.chunk.write(op1, self.prev.line);
+        self.level.function.chunk.write(op2, self.prev.line);
     }
 
     fn emit_constant(&mut self, value: Value) {
-        let index = self.chunk.add_constant(value);
+        let index = self.level.function.chunk.add_constant(value);
         self.emit(index);
     }
 
     fn chunk_len(&self) -> usize {
-        self.chunk.code.len()
+        self.level.function.chunk.code.len()
     }
 
     fn emit_jump_back(&mut self, index: usize) {
-        let jump_index = self.chunk.code.len() - index + 1;
+        let jump_index = self.level.function.chunk.code.len() - index + 1;
         self.emit(OpCode::JumpBack(jump_index));
     }
 
     fn patch_jump(&mut self, index: usize) {
-        let jump = self.chunk.code.len() - index - 1;
-        match self.chunk.code[index] {
+        let jump = self.level.function.chunk.code.len() - index - 1;
+        match self.level.function.chunk.code[index] {
             OpCode::Jump(ref mut x) => *x = jump,
             OpCode::JumpIfFalse(ref mut x) => *x = jump,
             op => panic!("Attempt to patch a jump with unsupported OpCode: {:?}", op),
@@ -420,7 +440,7 @@ impl Compiler {
     }
 
     fn define_variable(&mut self, index: usize) {
-        if self.scope_depth > 0 {
+        if self.level.scope_depth > 0 {
             self.mark_initialized();
             return;
         }
@@ -528,24 +548,24 @@ impl Compiler {
     fn parse_variable(&mut self, message: &str) -> usize {
         self.eat(TokenType::Identifier, message);
         self.declare_variable();
-        if self.scope_depth > 0 {
+        if self.level.scope_depth > 0 {
             return 0;
         }
         self.identifier_constant(self.prev.clone())
     }
 
     fn mark_initialized(&mut self) {
-        self.locals.last_mut().unwrap().depth = Some(self.scope_depth);
+        self.level.locals.last_mut().unwrap().depth = Some(self.level.scope_depth);
     }
 
     fn identifier_constant(&mut self, token: Token) -> usize {
         let name = Value::Str(token.lexeme);
-        self.chunk.add_constant(name);
-        self.chunk.constants.len() - 1
+        self.level.function.chunk.add_constant(name);
+        self.level.function.chunk.constants.len() - 1
     }
 
     fn declare_variable(&mut self) {
-        if self.scope_depth == 0 {
+        if self.level.scope_depth == 0 {
             return;
         }
 
@@ -557,8 +577,8 @@ impl Compiler {
     }
 
     fn search_locals(&self, name: &Token) -> bool {
-        for local in self.locals.iter().rev() {
-            if local.depth.is_some() && local.depth.unwrap() < self.scope_depth {
+        for local in self.level.locals.iter().rev() {
+            if local.depth.is_some() && local.depth.unwrap() < self.level.scope_depth {
                 return false;
             }
             if local.name.lexeme == name.lexeme {
@@ -569,7 +589,7 @@ impl Compiler {
     }
 
     fn resolve_local(&mut self, name: &Token) -> Option<usize> {
-        for (index, local) in self.locals.iter().enumerate().rev() {
+        for (index, local) in self.level.locals.iter().enumerate().rev() {
             if name.lexeme == local.name.lexeme {
                 if local.depth.is_none() {
                     self.error("Cannot read local variable in its own initializer");
@@ -581,7 +601,7 @@ impl Compiler {
     }
 
     fn add_local(&mut self, name: Token) {
-        self.locals.push(Local { name, depth: None });
+        self.level.locals.push(Local { name, depth: None });
     }
 
     fn matches(&mut self, id: TokenType) -> bool {
@@ -647,34 +667,30 @@ impl Compiler {
     }
 
     fn begin_scope(&mut self) {
-        self.scope_depth += 1;
+        self.level.scope_depth += 1;
     }
 
     fn end_scope(&mut self) {
-        self.scope_depth -= 1;
+        self.level.scope_depth -= 1;
 
-        for i in (0..self.locals.len()).rev() {
-            if self.locals[i].depth.unwrap() > self.scope_depth {
+        for i in (0..self.level.locals.len()).rev() {
+            if self.level.locals[i].depth.unwrap() > self.level.scope_depth {
                 self.emit(OpCode::Pop);
-                self.locals.pop();
+                self.level.locals.pop();
             }
         }
     }
 
     fn end_compile(&mut self) {
         self.emit(OpCode::Return);
-
-        // if cfg!(debug_assertions) && !self.had_error {
-        //     self.chunk.disassemble("Debug code");
-        // }
     }
 }
 
-pub fn compile(code: &str) -> Result<Chunk, LangError> {
+pub fn compile(code: &str) -> Result<Function, LangError> {
     let mut compiler = Compiler::new(code);
     let passed = compiler.compile();
-    if passed {
-        Ok(compiler.chunk)
+    if passed.is_ok() {
+        Ok(compiler.level.function)
     } else {
         Err(LangError::CompileError)
     }
