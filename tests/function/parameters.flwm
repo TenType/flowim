@@ -1,0 +1,5 @@
+fun add(x, y, z)
+    print x + y + z //> 6
+end
+
+add(1, 2, 3)

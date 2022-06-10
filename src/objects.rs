@@ -1,16 +1,17 @@
 use crate::chunk::Chunk;
 use std::fmt::{self, Display};
 
+#[derive(PartialEq)]
 pub enum FunctionType {
     Function,
     Script,
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct Function {
-    arity: usize,
+    pub arity: usize,
     pub chunk: Chunk,
-    name: String,
+    pub name: String,
 }
 
 impl Function {

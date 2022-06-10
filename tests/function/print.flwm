@@ -1,0 +1,5 @@
+fun foo()
+    // Do nothing
+end
+
+print foo //> <fun foo>

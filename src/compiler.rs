@@ -1,5 +1,5 @@
 use crate::{
-    chunk::{OpCode, Value},
+    chunk::{Chunk, OpCode, Value},
     lexer::Lexer,
     objects::{Function, FunctionType},
     result::LangError,
@@ -56,6 +56,19 @@ struct Local {
     depth: Option<usize>,
 }
 
+impl Default for Local {
+    fn default() -> Local {
+        Local {
+            name: Token {
+                id: TokenType::Error,
+                lexeme: String::new(),
+                line: 0,
+            },
+            depth: Some(0),
+        }
+    }
+}
+
 struct Level {
     function: Function,
     function_type: FunctionType,
@@ -64,18 +77,18 @@ struct Level {
 }
 
 impl Level {
-    fn new() -> Self {
+    fn new(function_type: FunctionType) -> Self {
         Level {
             function: Function::new(),
-            function_type: FunctionType::Script,
-            locals: Vec::new(),
+            function_type,
+            locals: vec![Local::default()],
             scope_depth: 0,
         }
     }
 }
 
 struct Compiler {
-    level: Level,
+    levels: Vec<Level>,
     lexer: Lexer,
     curr: Token,
     prev: Token,
@@ -97,7 +110,10 @@ impl Compiler {
         // let empty = || rule(None, None, P::None);
 
         let rules = HashMap::from([
-            (LeftParen, rule(Some(Self::group), None, P::None)),
+            (
+                LeftParen,
+                rule(Some(Self::group), Some(Self::call), P::Call),
+            ),
             (Minus, rule(Some(Self::unary), Some(Self::binary), P::Term)),
             (Plus, rule(None, Some(Self::binary), P::Term)),
             (Slash, rule(None, Some(Self::binary), P::Factor)),
@@ -119,7 +135,7 @@ impl Compiler {
         ]);
 
         Compiler {
-            level: Level::new(),
+            levels: vec![Level::new(FunctionType::Script)],
             lexer: Lexer::new(code),
             curr: Token {
                 id: TokenType::Eof,
@@ -142,13 +158,13 @@ impl Compiler {
         while !self.matches(TokenType::Eof) {
             self.declaration();
         }
-        self.end_compile();
+        self.emit_return();
         self.eat(TokenType::Eof, "Expected to reach the end of the file");
 
         if self.had_error {
             Err(LangError::CompileError)
         } else {
-            Ok(self.level.function.clone())
+            Ok(self.level().function.clone())
         }
     }
 
@@ -162,6 +178,18 @@ impl Compiler {
             }
             self.error_curr(&self.curr.lexeme.clone());
         }
+    }
+
+    fn level(&self) -> &Level {
+        self.levels.last().unwrap()
+    }
+
+    fn level_mut(&mut self) -> &mut Level {
+        self.levels.last_mut().unwrap()
+    }
+
+    fn chunk(&mut self) -> &mut Chunk {
+        &mut self.level_mut().function.chunk
     }
 
     fn eat(&mut self, id: TokenType, message: &str) {
@@ -179,36 +207,39 @@ impl Compiler {
     }
 
     fn emit(&mut self, op: OpCode) {
-        self.level.function.chunk.write(op, self.prev.line);
+        let line = self.prev.line;
+        self.chunk().write(op, line);
     }
 
     fn emit_with_index(&mut self, op: OpCode) -> usize {
-        self.level.function.chunk.write(op, self.prev.line);
-        self.level.function.chunk.code.len() - 1
+        let line = self.prev.line;
+        self.chunk().write(op, line);
+        self.chunk().code.len() - 1
     }
 
     fn emit_two(&mut self, op1: OpCode, op2: OpCode) {
-        self.level.function.chunk.write(op1, self.prev.line);
-        self.level.function.chunk.write(op2, self.prev.line);
+        let line = self.prev.line;
+        self.chunk().write(op1, line);
+        self.chunk().write(op2, line);
     }
 
     fn emit_constant(&mut self, value: Value) {
-        let index = self.level.function.chunk.add_constant(value);
+        let index = self.chunk().add_constant(value);
         self.emit(index);
     }
 
     fn chunk_len(&self) -> usize {
-        self.level.function.chunk.code.len()
+        self.level().function.chunk.code.len()
     }
 
     fn emit_jump_back(&mut self, index: usize) {
-        let jump_index = self.level.function.chunk.code.len() - index + 1;
+        let jump_index = self.chunk().code.len() - index + 1;
         self.emit(OpCode::JumpBack(jump_index));
     }
 
     fn patch_jump(&mut self, index: usize) {
-        let jump = self.level.function.chunk.code.len() - index - 1;
-        match self.level.function.chunk.code[index] {
+        let jump = self.chunk().code.len() - index - 1;
+        match self.chunk().code[index] {
             OpCode::Jump(ref mut x) => *x = jump,
             OpCode::JumpIfFalse(ref mut x) => *x = jump,
             op => panic!("Attempt to patch a jump with unsupported OpCode: {:?}", op),
@@ -216,7 +247,9 @@ impl Compiler {
     }
 
     fn declaration(&mut self) {
-        if self.matches(TokenType::Var) {
+        if self.matches(TokenType::Fun) {
+            self.fun_declaration();
+        } else if self.matches(TokenType::Var) {
             self.var_declaration();
         } else {
             self.statement();
@@ -239,9 +272,58 @@ impl Compiler {
         self.define_variable(index);
     }
 
+    fn fun_declaration(&mut self) {
+        let index = self.parse_variable("Expected a function name");
+        self.mark_initialized();
+        self.function(FunctionType::Function);
+        self.define_variable(index);
+    }
+
+    fn function(&mut self, kind: FunctionType) {
+        let mut level = Level::new(kind);
+        level.function.name = self.prev.lexeme.clone();
+
+        self.levels.push(level);
+
+        self.begin_scope();
+
+        self.eat(TokenType::LeftParen, "Expected '(' after function name");
+
+        if !self.check(TokenType::RightParen) {
+            loop {
+                self.level_mut().function.arity += 1;
+                let index = self.parse_variable("Expected a parameter name");
+                self.define_variable(index);
+
+                if !self.matches(TokenType::Comma) {
+                    break;
+                }
+            }
+        }
+        self.eat(
+            TokenType::RightParen,
+            "Expected ')' after function parameters",
+        );
+
+        self.eat_delimit();
+        self.block();
+        self.eat_delimit();
+
+        self.emit_return();
+
+        let fun = self.levels.pop().unwrap().function;
+
+        #[cfg(debug_assertions)]
+        fun.chunk.disassemble(&fun.name);
+
+        self.emit_constant(Value::Fun(fun));
+    }
+
     fn statement(&mut self) {
         if self.matches(TokenType::Print) {
             self.print_statement();
+        } else if self.matches(TokenType::Return) {
+            self.return_statement();
         } else if self.matches(TokenType::If) {
             self.if_statement();
         } else if self.matches(TokenType::While) {
@@ -260,6 +342,19 @@ impl Compiler {
     fn print_statement(&mut self) {
         self.expression();
         self.emit(OpCode::Print);
+    }
+
+    fn return_statement(&mut self) {
+        if self.level().function_type == FunctionType::Script {
+            self.error("Cannot return from top-level code")
+        }
+        if self.matches_delimit() {
+            self.emit_return();
+        } else {
+            self.expression();
+            self.eat_delimit();
+            self.emit(OpCode::Return);
+        }
     }
 
     fn if_statement(&mut self) {
@@ -440,7 +535,7 @@ impl Compiler {
     }
 
     fn define_variable(&mut self, index: usize) {
-        if self.level.scope_depth > 0 {
+        if self.level().scope_depth > 0 {
             self.mark_initialized();
             return;
         }
@@ -485,6 +580,27 @@ impl Compiler {
             LessEqual => self.emit_two(OpCode::Greater, OpCode::Not),
             _ => (),
         }
+    }
+
+    fn call(&mut self, _can_assign: bool) {
+        let arg_len = self.argument_list();
+        self.emit(OpCode::Call(arg_len));
+    }
+
+    fn argument_list(&mut self) -> usize {
+        let mut arg_len = 0;
+        if !self.check(TokenType::RightParen) {
+            loop {
+                self.expression();
+                arg_len += 1;
+
+                if !self.matches(TokenType::Comma) {
+                    break;
+                }
+            }
+        }
+        self.eat(TokenType::RightParen, "Expected ')' after arguments");
+        arg_len
     }
 
     fn and_op(&mut self, _can_assign: bool) {
@@ -548,24 +664,26 @@ impl Compiler {
     fn parse_variable(&mut self, message: &str) -> usize {
         self.eat(TokenType::Identifier, message);
         self.declare_variable();
-        if self.level.scope_depth > 0 {
+        if self.level().scope_depth > 0 {
             return 0;
         }
         self.identifier_constant(self.prev.clone())
     }
 
     fn mark_initialized(&mut self) {
-        self.level.locals.last_mut().unwrap().depth = Some(self.level.scope_depth);
+        if self.level().scope_depth > 0 {
+            self.level_mut().locals.last_mut().unwrap().depth = Some(self.level().scope_depth);
+        }
     }
 
     fn identifier_constant(&mut self, token: Token) -> usize {
         let name = Value::Str(token.lexeme);
-        self.level.function.chunk.add_constant(name);
-        self.level.function.chunk.constants.len() - 1
+        self.chunk().add_constant(name);
+        self.chunk().constants.len() - 1
     }
 
     fn declare_variable(&mut self) {
-        if self.level.scope_depth == 0 {
+        if self.level().scope_depth == 0 {
             return;
         }
 
@@ -577,8 +695,8 @@ impl Compiler {
     }
 
     fn search_locals(&self, name: &Token) -> bool {
-        for local in self.level.locals.iter().rev() {
-            if local.depth.is_some() && local.depth.unwrap() < self.level.scope_depth {
+        for local in self.level().locals.iter().rev() {
+            if local.depth.is_some() && local.depth.unwrap() < self.level().scope_depth {
                 return false;
             }
             if local.name.lexeme == name.lexeme {
@@ -589,7 +707,7 @@ impl Compiler {
     }
 
     fn resolve_local(&mut self, name: &Token) -> Option<usize> {
-        for (index, local) in self.level.locals.iter().enumerate().rev() {
+        for (index, local) in self.level().locals.iter().enumerate().rev() {
             if name.lexeme == local.name.lexeme {
                 if local.depth.is_none() {
                     self.error("Cannot read local variable in its own initializer");
@@ -601,7 +719,7 @@ impl Compiler {
     }
 
     fn add_local(&mut self, name: Token) {
-        self.level.locals.push(Local { name, depth: None });
+        self.level_mut().locals.push(Local { name, depth: None });
     }
 
     fn matches(&mut self, id: TokenType) -> bool {
@@ -659,7 +777,7 @@ impl Compiler {
             }
 
             match self.curr.id {
-                Class | Fn | Var | For | If | While | Print | Return => return,
+                Class | Fun | Var | For | If | While | Print | Return => return,
                 _ => (),
             }
             self.next();
@@ -667,21 +785,22 @@ impl Compiler {
     }
 
     fn begin_scope(&mut self) {
-        self.level.scope_depth += 1;
+        self.level_mut().scope_depth += 1;
     }
 
     fn end_scope(&mut self) {
-        self.level.scope_depth -= 1;
+        self.level_mut().scope_depth -= 1;
 
-        for i in (0..self.level.locals.len()).rev() {
-            if self.level.locals[i].depth.unwrap() > self.level.scope_depth {
+        for i in (0..self.level_mut().locals.len()).rev() {
+            if self.level_mut().locals[i].depth.unwrap() > self.level_mut().scope_depth {
                 self.emit(OpCode::Pop);
-                self.level.locals.pop();
+                self.level_mut().locals.pop();
             }
         }
     }
 
-    fn end_compile(&mut self) {
+    fn emit_return(&mut self) {
+        self.emit_constant(Value::Void);
         self.emit(OpCode::Return);
     }
 }
@@ -690,7 +809,10 @@ pub fn compile(code: &str) -> Result<Function, LangError> {
     let mut compiler = Compiler::new(code);
     let passed = compiler.compile();
     if passed.is_ok() {
-        Ok(compiler.level.function)
+        #[cfg(debug_assertions)]
+        compiler.chunk().disassemble("<script>");
+
+        Ok(compiler.level().function.clone())
     } else {
         Err(LangError::CompileError)
     }

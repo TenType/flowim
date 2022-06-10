@@ -1,0 +1,17 @@
+fun implicitReturn()
+    // Do nothing
+end
+
+print implicitReturn() //> void
+
+fun explicitReturn()
+    return 'Hello world!'
+end
+
+print explicitReturn() //> Hello world!
+
+fun returnArg(x)
+    return x
+end
+
+print returnArg('Hello world!') //> Hello world!

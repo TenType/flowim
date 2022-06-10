@@ -1,0 +1,9 @@
+fun call(callback, x)
+    callback(x)
+end
+
+fun printX(x)
+    print x
+end
+
+call(printX, 'Hello world!') //> Hello world!

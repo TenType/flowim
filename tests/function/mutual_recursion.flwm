@@ -1,0 +1,16 @@
+fun isOdd(n)
+    if n == 0
+        return false
+    end
+    return isEven(n - 1)
+end
+
+fun isEven(n)
+    if n == 0
+        return true
+    end
+    return isOdd(n - 1)
+end
+
+print isOdd(3) //> true
+print isEven(4) //> true

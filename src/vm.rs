@@ -5,6 +5,8 @@ use crate::{
 };
 use std::collections::HashMap;
 
+const FRAME_LIMIT: usize = 64;
+
 pub type GlobalsType = HashMap<String, Value>;
 
 #[derive(Clone)]
@@ -34,7 +36,7 @@ impl VM {
     pub fn new(globals: GlobalsType) -> Self {
         Self {
             frames: Vec::new(),
-            stack: Vec::new(),
+            stack: vec![Value::Void],
             globals,
         }
     }
@@ -51,6 +53,18 @@ impl VM {
         self.stack.last().expect("Empty stack").clone()
     }
 
+    fn peek_more(&self, n: usize) -> Value {
+        self.stack[self.stack.len() - n - 1].clone()
+    }
+
+    fn frame(&self) -> &CallFrame {
+        self.frames.last().expect("No frames found")
+    }
+
+    fn frame_mut(&mut self) -> &mut CallFrame {
+        self.frames.last_mut().expect("No frames found")
+    }
+
     fn is_falsy(&self, value: Value) -> bool {
         match value {
             Value::Bool(v) => !v,
@@ -58,13 +72,13 @@ impl VM {
         }
     }
 
-    fn read_constant(&self, frame: &CallFrame, index: usize) -> Value {
-        frame.function.chunk.constants[index].clone()
+    fn read_constant(&self, index: usize) -> Value {
+        self.frame().function.chunk.constants[index].clone()
     }
 
-    fn read_string(&self, frame: &CallFrame, index: usize) -> String {
-        if let Value::Str(s) = self.read_constant(frame, index) {
-            s.clone()
+    fn read_string(&self, index: usize) -> String {
+        if let Value::Str(s) = self.read_constant(index) {
+            s
         } else {
             panic!("Constant is not a string");
         }
@@ -75,14 +89,12 @@ impl VM {
         use OpCode::*;
         use Value::*;
 
-        let frame = self.frames.last().cloned().expect("No frames found");
-
         let mut operands = (self.pop(), self.pop());
-        let mut bad_operation = |op: &str,
-                                 expected: &str,
-                                 actual: (Value, Value)|
+        let bad_operation = |op: &str,
+                             expected: &str,
+                             actual: (Value, Value)|
          -> Result<(), LangError> {
-            self.runtime_error(&frame, &format!(
+            self.runtime_error(&format!(
                     "Cannot use the operator `{op}` with `{}` and `{}`; expected two arguments of `{expected}`.",
                     type_as_str(actual.0),
                     type_as_str(actual.1)
@@ -116,14 +128,14 @@ impl VM {
             Divide => match operands {
                 (Int(b), Int(a)) => {
                     if b == 0 {
-                        self.runtime_error(&frame, "Division by zero");
+                        self.runtime_error("Division by zero");
                         return Err(RuntimeError);
                     }
                     Int(a / b)
                 }
                 (Float(b), Float(a)) => {
                     if b == 0.0 {
-                        self.runtime_error(&frame, "Division by zero");
+                        self.runtime_error("Division by zero");
                         return Err(RuntimeError);
                     }
                     Float(a / b)
@@ -151,8 +163,35 @@ impl VM {
         Ok(())
     }
 
+    fn call_value(&mut self, value: Value, arg_len: usize) -> Result<CallFrame, LangError> {
+        match value {
+            Value::Fun(function) => self.call(function, arg_len),
+            _ => {
+                self.runtime_error("Can only call functions and classes");
+                Err(LangError::RuntimeError)
+            }
+        }
+    }
+
+    fn call(&mut self, function: Function, arg_len: usize) -> Result<CallFrame, LangError> {
+        if arg_len != function.arity {
+            self.runtime_error(&format!(
+                "Expected {} arguments, but found {}",
+                function.arity, arg_len
+            ));
+            Err(LangError::RuntimeError)
+        } else if self.frames.len() >= FRAME_LIMIT {
+            self.runtime_error("Call stack limit exceeded");
+            Err(LangError::RuntimeError)
+        } else {
+            let mut frame = CallFrame::new(function);
+            frame.index = self.stack.len() - arg_len - 1;
+            Ok(frame)
+        }
+    }
+
     #[cfg(debug_assertions)]
-    fn disassemble(&self, frame: &CallFrame, op: OpCode) {
+    fn disassemble(&self, op: OpCode) {
         if !self.stack.is_empty() {
             print!("        |  ");
             for item in &self.stack {
@@ -160,25 +199,30 @@ impl VM {
             }
             println!();
         }
-        frame.function.chunk.disassemble_op(&op, frame.counter - 1);
+        self.frame()
+            .function
+            .chunk
+            .disassemble_op(&op, self.frame().counter - 1);
     }
 
     pub fn run(&mut self, function: Function) -> Result<GlobalsType, LangError> {
-        let mut frame = CallFrame::new(function);
-        self.frames.push(frame.clone());
+        self.frames.push(CallFrame::new(function));
+
+        #[cfg(debug_assertions)]
+        println!("== VM Debug ==");
 
         loop {
-            let op = frame.clone().function.chunk.code[frame.counter];
+            let op = self.frame().function.chunk.code[self.frame().counter];
 
-            frame.counter += 1;
+            self.frame_mut().counter += 1;
 
             #[cfg(debug_assertions)]
-            self.disassemble(&frame, op);
+            self.disassemble(op);
 
             use OpCode::*;
             match op {
                 Constant(index) => {
-                    let constant = self.read_constant(&frame, index);
+                    let constant = self.read_constant(index);
                     self.push(constant);
                 }
 
@@ -197,18 +241,31 @@ impl VM {
                         self.push(Value::Float(-value));
                     }
                     value => {
-                        self.runtime_error(
-                            &frame,
-                            &format!("Operand of {} must be an `int` or `float`", value),
-                        );
+                        self.runtime_error(&format!(
+                            "Operand of {} must be an `int` or `float`",
+                            value
+                        ));
                         return Err(LangError::RuntimeError);
                     }
                 },
+
                 Not => {
                     let v = self.pop();
                     self.push(Value::Bool(self.is_falsy(v)));
                 }
-                Return => return Ok(self.globals.clone()),
+
+                Return => {
+                    let result = self.pop();
+                    let frame = self.frames.pop();
+
+                    if self.frames.is_empty() {
+                        return Ok(self.globals.clone());
+                    }
+
+                    self.stack.truncate(frame.unwrap().index);
+                    self.push(result);
+                }
+
                 Equal => self.binary_op(Equal)?,
                 Greater => self.binary_op(Greater)?,
                 Less => self.binary_op(Less)?,
@@ -219,62 +276,74 @@ impl VM {
                 }
 
                 Jump(index) => {
-                    frame.counter += index;
+                    self.frame_mut().counter += index;
                 }
 
                 JumpIfFalse(index) => {
                     if self.is_falsy(self.peek()) {
-                        frame.counter += index;
+                        self.frame_mut().counter += index;
                     }
                 }
 
                 JumpBack(index) => {
-                    frame.counter -= index;
+                    self.frame_mut().counter -= index;
                 }
 
                 DefineGlobal(index) => {
-                    let name = self.read_string(&frame, index);
+                    let name = self.read_string(index);
                     let value = self.pop();
                     self.globals.insert(name, value);
                 }
 
                 GetGlobal(index) => {
-                    let name = self.read_string(&frame, index);
+                    let name = self.read_string(index);
                     match self.globals.get(&name) {
                         Some(value) => {
                             let v = value.clone();
                             self.push(v);
                         }
                         None => {
-                            self.runtime_error(&frame, &format!("`{}` is not defined", name));
+                            self.runtime_error(&format!("`{}` is not defined", name));
                             return Err(LangError::RuntimeError);
                         }
                     }
                 }
 
                 SetGlobal(index) => {
-                    let name = self.read_string(&frame, index);
+                    let name = self.read_string(index);
                     if self.globals.insert(name.clone(), self.peek()).is_none() {
                         self.globals.remove(&name);
-                        self.runtime_error(&frame, &format!("`{}` is not defined", name));
+                        self.runtime_error(&format!("`{}` is not defined", name));
                         return Err(LangError::RuntimeError);
                     }
                 }
 
                 GetLocal(index) => {
-                    self.push(self.stack[index + frame.index].clone());
+                    self.push(self.stack[index + self.frame().index].clone());
                 }
 
                 SetLocal(index) => {
-                    self.stack[index + frame.index] = self.peek();
+                    let x = index + self.frame().index;
+                    self.stack[x] = self.peek();
+                }
+
+                Call(index) => {
+                    let frame = self.call_value(self.peek_more(index), index)?;
+                    self.frames.push(frame);
                 }
             }
         }
     }
 
-    fn runtime_error(&mut self, frame: &CallFrame, msg: &str) {
+    fn runtime_error(&self, msg: &str) {
         eprintln!("{}", msg);
-        let line = frame.function.chunk.lines[frame.counter - 1];
-        eprintln!("[line {}] in script", line);
+
+        for frame in self.frames.iter().rev() {
+            eprintln!(
+                "    at {}:{}",
+                frame.function.name,
+                frame.function.chunk.lines.last().unwrap()
+            );
+        }
     }
 }

@@ -44,7 +44,7 @@ pub enum TokenType {
     For,
     Var,
     Let,
-    Fn,
+    Fun,
     Return,
     Class,
     Super,

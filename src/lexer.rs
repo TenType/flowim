@@ -24,7 +24,7 @@ impl Lexer {
             ("for", For),
             ("var", Var),
             ("let", Let),
-            ("fn", Fn),
+            ("fun", Fun),
             ("return", Return),
             ("class", Class),
             ("super", Super),
@@ -306,11 +306,11 @@ mod tests {
     #[test]
     fn keywords() {
         let expected = vec![
-            Or, And, Not, If, Else, While, For, Var, Let, Fn, Return, Class, Super, SelfKw, Print,
+            Or, And, Not, If, Else, While, For, Var, Let, Fun, Return, Class, Super, SelfKw, Print,
             Do, End, Eof,
         ];
         let actual =
-            lex("or and not if else while for var let fn return class super self print do end");
+            lex("or and not if else while for var let fun return class super self print do end");
         assert_eq!(expected, actual);
     }
 

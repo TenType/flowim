@@ -1,9 +1,13 @@
+use crate::objects::Function;
+
 #[derive(Clone, PartialEq)]
 pub enum Value {
+    Void,
     Bool(bool),
     Int(isize),
     Float(f64),
     Str(String),
+    Fun(Function),
 }
 
 use std::fmt::{Display, Formatter, Result};
@@ -21,6 +25,8 @@ impl Display for Value {
                 }
             }
             Str(value) => write!(format, "{}", value),
+            Fun(value) => write!(format, "{}", value),
+            Void => write!(format, "void"),
         }
     }
 }
@@ -32,10 +38,12 @@ pub fn type_as_str<'a>(value: Value) -> &'a str {
         Int(_) => "int",
         Float(_) => "float",
         Str(_) => "str",
+        Fun(_) => "fun",
+        Void => "void",
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum OpCode {
     Constant(usize),
     Add,
@@ -58,9 +66,10 @@ pub enum OpCode {
     SetGlobal(usize),
     GetLocal(usize),
     SetLocal(usize),
+    Call(usize),
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct Chunk {
     pub lines: Vec<usize>,
     pub constants: Vec<Value>,
@@ -87,7 +96,7 @@ impl Chunk {
     }
 
     #[cfg(debug_assertions)]
-    pub fn _disassemble(&self, name: &str) {
+    pub fn disassemble(&self, name: &str) {
         println!("== {} ==", name);
         for (i, instruction) in self.code.iter().enumerate() {
             self.disassemble_op(instruction, i);
@@ -100,8 +109,8 @@ impl Chunk {
     }
 
     #[cfg(debug_assertions)]
-    fn disassemble_jump(&self, name: &str, sign: char, index: usize) {
-        println!("{:<16} {:>4} ({sign})", name, index);
+    fn disassemble_large(&self, name: &str, index: usize) {
+        println!("{:<16} {:>4}", name, index);
     }
 
     #[cfg(debug_assertions)]
@@ -128,14 +137,15 @@ impl Chunk {
             Less => println!("LESS"),
             Print => println!("PRINT"),
             Pop => println!("POP"),
-            Jump(index) => self.disassemble_jump("JUMP", '+', *index + 1),
-            JumpIfFalse(index) => self.disassemble_jump("JUMP_IF_FALSE", '+', *index + 1),
-            JumpBack(index) => self.disassemble_jump("JUMP_BACK", '-', *index - 1),
+            Jump(index) => self.disassemble_large("JUMP", *index + 1),
+            JumpIfFalse(index) => self.disassemble_large("JUMP_IF_FALSE", *index + 1),
+            JumpBack(index) => self.disassemble_large("JUMP_BACK", *index - 1),
             DefineGlobal(index) => self.disassemble_constant("DEFINE_GLOBAL", *index),
             GetGlobal(index) => self.disassemble_constant("GET_GLOBAL", *index),
             SetGlobal(index) => self.disassemble_constant("SET_GLOBAL", *index),
-            GetLocal(index) => self.disassemble_constant("GET_LOCAL", *index),
-            SetLocal(index) => self.disassemble_constant("SET_LOCAL", *index),
+            GetLocal(index) => self.disassemble_large("GET_LOCAL", *index),
+            SetLocal(index) => self.disassemble_large("SET_LOCAL", *index),
+            Call(index) => self.disassemble_large("CALL", *index),
         }
     }
 }
