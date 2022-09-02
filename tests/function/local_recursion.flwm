@@ -1,10 +1,10 @@
 do
-    fun fibonnaci(n)
+    fun fibonacci(n)
         if n < 2
             return n
         end
-        return fibonnaci(n - 1) + fibonnaci(n - 2)
+        return fibonacci(n - 1) + fibonacci(n - 2)
     end
 
-    print fibonnaci(8) //> 21
+    print fibonacci(8) //> 21
 end
